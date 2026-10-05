@@ -49,7 +49,10 @@ def sha(file):
     return digest.hexdigest()
 
 def run(*args):
-    result = subprocess.run(args, capture_output=True, text=True, check=True)
+    result = subprocess.run(args, capture_output=True, text=True)
+    if result.returncode:
+        print((result.stdout + result.stderr)[-4000:], file=sys.stderr)
+        raise subprocess.CalledProcessError(result.returncode, args)
     return result.stdout + result.stderr
 
 def source_files(directory):
@@ -293,7 +296,8 @@ def package(runtime, output, engine_inventory=None, ai_memory_runtime=None, ai_m
     signature = run('/usr/bin/codesign', '-dv', '--verbose=4', str(runtime))
     if 'Authority=Developer ID Application: Jarred Sumner (7FRXF46ZSN)' not in signature or 'TeamIdentifier=7FRXF46ZSN' not in signature or 'Signature=adhoc' in signature:
         raise ValueError('Unexpected vendor Developer ID signature.')
-    run('/usr/bin/codesign', '--verify', '--strict', '--test-requirement', '=notarized', str(runtime))
+    # A clean CI host needs the vendor's online ticket, without modifying code.
+    run('/usr/bin/codesign', '--verify', '--strict', '--check-notarization', '--test-requirement', '=notarized', str(runtime))
     version = run(str(runtime), '--version').strip()
     if version != RUNTIME_VERSION:
         raise ValueError('Runtime version does not match the reviewed portable content pin.')
@@ -365,7 +369,7 @@ def package(runtime, output, engine_inventory=None, ai_memory_runtime=None, ai_m
         run('/usr/bin/codesign', '--verify', '--strict', str(stage / 'runtime/ai-memory'))
     (stage / 'runtime/bun').chmod(0o755)
     (stage / 'scripts/launch-mcp.sh').chmod(0o755)
-    run('/usr/bin/codesign', '--verify', '--strict', '--test-requirement', '=notarized', str(stage / 'runtime/bun'))
+    run('/usr/bin/codesign', '--verify', '--strict', '--check-notarization', '--test-requirement', '=notarized', str(stage / 'runtime/bun'))
     content_receipt = copy_admitted_technical(admitted_content, *content, stage) if content else None
     # Both supported plugin formats describe the same stable identity.
     plugin = json.loads((stage / 'plugin.json').read_text())

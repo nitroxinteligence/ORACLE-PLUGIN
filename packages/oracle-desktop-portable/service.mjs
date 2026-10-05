@@ -30,6 +30,7 @@ import {createPortableContentSource} from './content-source-composition.mjs';
 import {createPortableAccessGrantResolver} from './access-grant-composition.mjs';
 import {createKnowledgeInterviewService} from './knowledge-interview-service.mjs';
 import {createPortableUpdateService} from './update-service.mjs';
+import {GBRAIN_SOURCE_PIN} from './gbrain-source-runner.mjs';
 
 const fail=(code,message)=>{throw Object.assign(new Error(message),{code});};
 const noArgs=p=>{if(Object.keys(p).length)fail('invalid_request','Esta ação não aceita argumentos.');};
@@ -92,7 +93,7 @@ export async function createService({root,hostPackageRoot,dataDir=process.env.OR
   if(!runtimeConfig&&existsSync(join(root,'portable-package-receipt.json'))&&existsSync(join(root,'engine-source-receipt.json'))) {
     const packageReceipt=JSON.parse(readFileSync(join(root,'portable-package-receipt.json'),'utf8'));
     const engineReceipt=JSON.parse(readFileSync(join(root,'engine-source-receipt.json'),'utf8'));
-    if(packageReceipt.engineSourceIncluded===true&&engineReceipt.engineSourcePin==='8c9a8e9a480c388cf7a87dc0c48dd0d56e6c4bb3')runtimeConfig={runtime:resolve(root,process.platform==='win32'?'runtime/bun.exe':'runtime/bun'),runtimeSHA256:packageReceipt.runtimeSHA256,sourceRoot:resolve(root,'engine-source')};
+    if(packageReceipt.engineSourceIncluded===true&&engineReceipt.engineSourcePin===GBRAIN_SOURCE_PIN)runtimeConfig={runtime:resolve(root,process.platform==='win32'?'runtime/bun.exe':'runtime/bun'),runtimeSHA256:packageReceipt.runtimeSHA256,sourceRoot:resolve(root,'engine-source')};
   }
   // Trusted test composition may use an already enforced outer OS sandbox.
   // The production STDIO entrypoint never supplies this option; no env/RPC flag.

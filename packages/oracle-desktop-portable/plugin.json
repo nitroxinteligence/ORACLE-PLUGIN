@@ -1,6 +1,6 @@
 {
   "$schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
-  "name": "oracle-system-mac-v017",
+  "name": "oracle-system-mac-stable",
   "version": "0.1.19",
   "description": "Sistema de trabalho com inteligência artificial e conhecimento local do Obsidian, com interface Oracle.",
   "author": {

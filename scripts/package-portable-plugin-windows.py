@@ -15,7 +15,7 @@ limits_module=importlib.util.module_from_spec(limits_spec);limits_spec.loader.ex
 SOURCE=ROOT/'packages/oracle-desktop-portable'
 spec=importlib.util.spec_from_file_location('windows_vendor_probe',ROOT/'scripts/package-windows-runtime-probe.py')
 vendor=importlib.util.module_from_spec(spec);spec.loader.exec_module(vendor)
-NAME='oracle-system-windows-v017';LIMIT=limits_module.MAX_ARCHIVE_BYTES
+NAME='oracle-system-windows-stable';LIMIT=limits_module.MAX_ARCHIVE_BYTES
 MAC_VERIFIER_SHA=UPSTREAM_PINS['bun']['darwin-arm64']['sha256']
 def sha(path):
  h=hashlib.sha256()

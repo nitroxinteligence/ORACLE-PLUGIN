@@ -24,7 +24,7 @@ limits_spec.loader.exec_module(limits_module)
 
 ROOT = Path(__file__).resolve().parents[1]
 SOURCE = ROOT / 'packages/oracle-desktop-portable'
-NAME = 'oracle-system-mac-v017'
+NAME = 'oracle-system-mac-stable'
 LIMIT = limits_module.MAX_ARCHIVE_BYTES
 RUNTIME_VERSION = UPSTREAM_PINS['bun']['version']
 RUNTIME_SHA256 = UPSTREAM_PINS['bun']['darwin-arm64']['sha256']

@@ -14,8 +14,8 @@ def qualify(archive, output):
             if path.is_absolute() or '..' in path.parts or row.filename in names or stat.S_ISLNK(mode) or row.is_dir(): raise ValueError('Unsafe plugin member')
             names.add(row.filename); roots.add(path.parts[0]); target = package / path
             target.parent.mkdir(parents=True, exist_ok=True); target.write_bytes(z.read(row)); target.chmod(mode & 0o777 or 0o644)
-        if roots != {'oracle-system-mac-v017'}: raise ValueError('Stable Mac identity required')
-    bundle = package / 'oracle-system-mac-v017'; home = output / 'home'; home.mkdir(); profile = output / 'profile'
+        if roots != {'oracle-system-mac-stable'}: raise ValueError('Stable Mac identity required')
+    bundle = package / 'oracle-system-mac-stable'; home = output / 'home'; home.mkdir(); profile = output / 'profile'
     env = {'HOME': str(home), 'PATH': '/usr/bin:/bin:/usr/sbin:/sbin', 'LANG': 'en_US.UTF-8', 'ORACLE_PORTABLE_PLUGIN_DATA': str(profile)}
     p = subprocess.Popen([str(bundle / 'scripts/launch-mcp.sh')], stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE, cwd=bundle, env=env)
     requests = [{'jsonrpc': '2.0', 'id': 1, 'method': 'initialize', 'params': {'protocolVersion': '2024-11-05', 'capabilities': {}, 'clientInfo': {'name': 'oracle-compatibility-gate', 'version': '1'}}}, {'jsonrpc': '2.0', 'method': 'notifications/initialized', 'params': {}}, {'jsonrpc': '2.0', 'id': 2, 'method': 'tools/list', 'params': {}}, {'jsonrpc': '2.0', 'id': 3, 'method': 'tools/call', 'params': {'name': 'oracle_dispatch', 'arguments': {'method': 'onboardingStatus', 'params': {}}}}]

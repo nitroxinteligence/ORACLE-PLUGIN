@@ -6,7 +6,7 @@ def main(a):
     root = pathlib.Path(__file__).resolve().parents[1]; output = pathlib.Path(a.output).absolute()
     if output.exists() or output.resolve() != output or not output.is_relative_to(root / '.work'): raise ValueError('Fresh canonical publisher output required')
     output.mkdir(parents=True); platforms = {}; mac = None
-    for platform, name, file in [('darwin-arm64', 'oracle-system-mac-v017', a.mac), ('win32-x64', 'oracle-system-windows-v017', a.windows)]:
+    for platform, name, file in [('darwin-arm64', 'oracle-system-mac-stable', a.mac), ('win32-x64', 'oracle-system-windows-stable', a.windows)]:
         archive = pathlib.Path(file).absolute(); data = archive.read_bytes()
         if len(data) >= 100000000: raise ValueError('Plugin archive limit')
         inventory = {}; package = output / 'plugins' / name; package.mkdir(parents=True)

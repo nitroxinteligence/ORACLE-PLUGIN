@@ -2,7 +2,7 @@
 
 Distribuição pública do plugin Oracle para clientes em contas independentes. O uso do sistema continua exigindo uma licença válida e a seleção explícita da pasta do Obsidian.
 
-Adicione este repositório como marketplace no gerenciador de plugins compatível do ChatGPT/Codex. O marketplace se chama `oracle-system`. Escolha `oracle-system-mac-v017` para macOS Apple Silicon ou `oracle-system-windows-v017` para Windows x64. O nome técnico permanece estável entre versões.
+Adicione este repositório como marketplace no gerenciador de plugins compatível do ChatGPT/Codex. O marketplace se chama `oracle-system`. Escolha `oracle-system-mac-stable` para macOS Apple Silicon ou `oracle-system-windows-stable` para Windows x64. O nome técnico permanece estável entre versões.
 
 Os ZIPs completos também estão nas [releases](https://github.com/nitroxinteligence/ORACLE-PLUGIN/releases) e na [página de download](https://oracle.falamateus.com.br/download/). Instalações importadas por ZIP precisam usar o canal do host para receber a substituição do pacote. A interface do Oracle oferece acesso a esse canal.
 

@@ -1,0 +1,74 @@
+import fs from 'node:fs/promises';
+import {constants} from 'node:fs';
+import {join,dirname,resolve} from 'node:path';
+import {homedir} from 'node:os';
+import {assertSkillsRelease,verifySkillsFile} from './skills-release-admission.mjs';
+
+const fail=(code,message)=>{throw Object.assign(new Error(message),{code});};
+const identity=info=>[info.dev,info.ino].join(':');
+const stable=info=>[identity(info),info.size,info.mtimeMs,info.ctimeMs].join(':');
+
+/** Trusted installer composition, never an RPC path. Register signed curated
+ * entrypoints in Codex USER scope after local verification, without copying
+ * originals, touching account/config or granting connection/hook consent.
+ * Windows directory junctions do not require symlink elevation. */
+export function createCodexUserSkillsRegistration({policy,vault,userHome=homedir(),platform=process.platform}={}){
+ if(!policy?.assertAdmission||!policy?.revalidateAdmission||!vault?.status||typeof userHome!=='string'||resolve(userHome)!==userHome)fail('codex_skills_registration_unavailable','Pasta de skills do Codex indisponível.');
+ let queue=Promise.resolve();
+ async function register({admitted,ticket,signal,check=()=>{},preservedPaths=[]}={}){
+  assertSkillsRelease(admitted);
+  if(!admitted.items.length)fail('codex_skills_catalog_missing','O acervo assinado não contém entradas de skills para o Codex.');
+  const selected=vault.status();
+  const guard=()=>{policy.assertAdmission(ticket);check();const active=vault.status();if(ticket?.capability!=='configure'||signal?.aborted||!selected.selected||!active.selected||active.root!==selected.root||active.generation!==selected.generation)fail('codex_skills_registration_changed','A autorização ou a pasta mudou durante o registro das skills.');};
+  guard();await policy.revalidateAdmission(ticket);guard();
+  async function directory(path,expected){
+   guard();const info=await fs.lstat(path);
+   if(!info.isDirectory()||info.isSymbolicLink()||await fs.realpath(path)!==path||expected&&identity(info)!==expected)fail('codex_skills_path_collision','A pasta de skills foi redirecionada ou substituída.');
+   guard();return identity(info);
+  }
+  const root=selected.root,rootIdentity=await directory(root),homeIdentity=await directory(userHome);
+  const sourceDirectory=async path=>{await directory(root,rootIdentity);let cursor=root;for(const part of path.slice(root.length+1).split('/')){cursor=join(cursor,part);await directory(cursor);}guard();};
+  async function read(path){
+   await sourceDirectory(dirname(path));guard();const before=await fs.lstat(path);
+   if(!before.isFile()||before.isSymbolicLink()||before.nlink!==1||before.size>32000000)fail('codex_skills_source_changed','Arquivo irregular na skill instalada.');
+   const fd=await fs.open(path,constants.O_RDONLY|constants.O_NOFOLLOW|constants.O_NONBLOCK);
+   try{if(stable(await fd.stat())!==stable(before))fail('codex_skills_source_changed','Arquivo da skill mudou.');const bytes=await fd.readFile();if(stable(await fd.stat())!==stable(before)||stable(await fs.lstat(path))!==stable(before))fail('codex_skills_source_changed','Arquivo da skill mudou.');guard();return bytes;}finally{await fd.close();}
+  }
+  const destination=join(userHome,'.agents','skills'),rows=[],skipped=[];
+  // Verify sources before creating any registration. Retain updater conflicts.
+  for(const item of admitted.items){
+   const folder=dirname(item.entry),files=admitted.files.filter(row=>row.path.startsWith(folder+'/'));
+   if(preservedPaths.some(path=>files.some(row=>row.path===path)||item.requiredFiles.includes(path))){skipped.push(item.hostName);continue;}
+   const required=new Set([...files.map(row=>row.path),...item.requiredFiles]);
+   for(const path of required)verifySkillsFile(admitted,path,await read(join(root,path)));
+   rows.push({name:item.hostName,source:join(root,folder),entry:join(root,item.entry),link:join(destination,item.hostName),required});
+  }
+  const parents=new Map([[userHome,homeIdentity]]);
+  for(const part of ['.agents','skills']){
+   const parent=[...parents.keys()].at(-1),path=join(parent,part);await directory(parent,parents.get(parent));guard();
+   await fs.mkdir(path,{mode:0o700}).catch(error=>{if(error.code!=='EEXIST')throw error;});parents.set(path,await directory(path));
+  }
+  const targetGuard=async()=>{guard();await directory(root,rootIdentity);for(const [path,id] of parents)await directory(path,id);guard();};
+  async function existing(row){
+   try{const info=await fs.lstat(row.link);if(!info.isSymbolicLink()||await fs.realpath(row.link)!==row.source)fail('codex_skills_registration_conflict',`A skill ${row.name} já existe em outra pasta. O registro existente foi preservado.`);return true;}
+   catch(error){if(error.code==='ENOENT'){try{await fs.lstat(row.link);}catch(missing){if(missing.code==='ENOENT')return false;throw missing;}}throw error;}
+  }
+  await targetGuard();for(const row of rows)await existing(row);
+  const created=[];
+  try{
+   for(const row of rows){
+    await targetGuard();
+    for(const path of row.required)verifySkillsFile(admitted,path,await read(join(root,path)));
+    if(!await existing(row)){await fs.symlink(row.source,row.link,platform==='win32'?'junction':'dir');created.push(row);}
+    await targetGuard();if(!await existing(row)||await fs.realpath(join(row.link,'SKILL.md'))!==row.entry)fail('codex_skills_registration_changed','A leitura do registro da skill divergiu.');
+    verifySkillsFile(admitted,row.entry.slice(root.length+1),await read(row.entry));
+   }
+   guard();return Object.freeze({registered:rows.length,created:created.length,skippedPreserved:skipped.length,complete:skipped.length===0,destination,releaseID:admitted.releaseID,requiredPaths:Object.freeze(rows.map(row=>row.entry)),registrationVerified:true,discoveryVerified:false,modelExecutionVerified:false});
+  }catch(error){
+   // Roll back only links this invocation created and whose target is intact.
+   for(const row of created.reverse())try{for(const [path,id] of parents){const info=await fs.lstat(path);if(!info.isDirectory()||info.isSymbolicLink()||identity(info)!==id||await fs.realpath(path)!==path)throw Error('Changed parent');}if(await fs.realpath(row.link)===row.source&&(await fs.lstat(row.link)).isSymbolicLink())await fs.unlink(row.link);}catch{}
+   throw error;
+  }
+ }
+ return options=>{const task=queue.then(()=>register(options));queue=task.catch(()=>{});return task;};
+}

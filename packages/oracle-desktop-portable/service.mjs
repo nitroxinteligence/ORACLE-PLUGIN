@@ -25,6 +25,7 @@ import {createCodexHostProvider} from './codex-host-provider.mjs';
 import {createCodexSkillsRouting} from './codex-skills-routing.mjs';
 import {createOfficialHooksInstaller} from './official-hooks-installer.mjs';
 import {createCodexInstallationProvider} from './codex-installation-provider.mjs';
+import {createCodexUserSkillsRegistration} from './codex-user-skills-registration.mjs';
 import {createHostHookAuthority,createHostCaptureProvider} from './host-capture-provider.mjs';
 import {createPortableContentSource} from './content-source-composition.mjs';
 import {createPortableAccessGrantResolver} from './access-grant-composition.mjs';
@@ -65,7 +66,7 @@ function defaultAIMemoryBackend({root,policy,vault,profileStore,dataDir,relayAut
 }
 
 // Dependencies injected here are trusted composition code, never RPC fields.
-export async function createService({root,hostPackageRoot,dataDir=process.env.ORACLE_PORTABLE_PLUGIN_DATA||process.env.PLUGIN_DATA,resourcesRoot,keys,deviceProvider,providers,host,now,selectionAdapter,maxScanEntries,knowledgeRuntime,contentSourceProvider,codexConnectionFactory,accessGrantResolver,aiMemoryFactory,aiMemoryPortabilityAuthorization,aiMemoryVerifyExplicitRequest,codexInstallationProvider,officialHooksInstaller,hostHookVerifier,updateFactory,knowledgeNetworkSandbox=process.platform==='darwin'}={}) {
+export async function createService({root,hostPackageRoot,dataDir=process.env.ORACLE_PORTABLE_PLUGIN_DATA||process.env.PLUGIN_DATA,resourcesRoot,keys,deviceProvider,providers,host,now,selectionAdapter,maxScanEntries,knowledgeRuntime,contentSourceProvider,codexConnectionFactory,accessGrantResolver,aiMemoryFactory,aiMemoryPortabilityAuthorization,aiMemoryVerifyExplicitRequest,codexInstallationProvider,codexUserHome,officialHooksInstaller,hostHookVerifier,updateFactory,knowledgeNetworkSandbox=process.platform==='darwin'}={}) {
   if(typeof root!=='string')fail('runtime_required','Pasta do Oracle ausente.');
   const resources=resourcesRoot||[resolve(root,'resources'),resolve(root,'../../Resources')].find(path=>existsSync(join(path,'web/index.html')));
   if(!resources)fail('resources_missing','Os arquivos do Oracle não foram encontrados.');
@@ -162,9 +163,12 @@ export async function createService({root,hostPackageRoot,dataDir=process.env.OR
   const aiMemoryTools={onChange(listener){aiMemoryListeners.add(listener);return()=>aiMemoryListeners.delete(listener);},async tools(options){if(!aiMemoryBackend)return [];try{return await aiMemoryBackend.tools(options);}catch(error){if(['ai_memory_unavailable','ai_memory_authorization_unavailable','ai_memory_binding_changed','ai_memory_identity_unverified','relay_connection_inactive','relay_authorization_changed','access_denied','stale_admission','vault_required','ai_memory_portability_required','ai_memory_portability_consent_required','ai_memory_consent_required','ai_memory_service_closed'].includes(error.code))return [];throw error;}},invoke(name,args,options){if(!aiMemoryBackend)fail('ai_memory_unavailable','Conclua a preparação autorizada do AI Memory antes de usar esta ferramenta.');return aiMemoryBackend.invoke(name,args,options);}};
   const unsubscribeConnection=connection?.onChange(()=>cancelMemory({cancelAI:false}));
   const memoryTools={onChange(listener){memoryListeners.add(listener);return()=>memoryListeners.delete(listener);},async tools(options){if(!memoryRelay||!memoryBinding)return [];try{return await memoryRelay.tools(options);}catch(error){if(['relay_connection_inactive','relay_engine_unavailable','relay_index_stale','relay_selection_changed','access_denied','stale_admission','vault_required'].includes(error.code))return [];throw error;}},invoke(name,args,options){if(!memoryRelay)fail('codex_connection_unavailable','Conecte explicitamente ao Codex antes de usar a memória.');return memoryRelay.invoke(name,args,options);}};
-  const admittedContentSource=typeof contentSourceProvider==='function'?async options=>{const source=await contentSourceProvider(options);if(pendingMemoryInstallation)await memoryConsent.admitInstallation(pendingMemoryInstallation,source.admitted,options);codexInstallationProvider.admit?.(source,options);return source;}:null;
+  const registerUserSkills=createCodexUserSkillsRegistration({policy,vault,...(codexUserHome===undefined?{}:{userHome:codexUserHome})});
+  let installedSkillsSource=null;
+  const admittedContentSource=typeof contentSourceProvider==='function'?async options=>{const source=await contentSourceProvider(options);if(pendingMemoryInstallation)await memoryConsent.admitInstallation(pendingMemoryInstallation,source.admitted,options);codexInstallationProvider.admit?.(source,options);installedSkillsSource=source.skills;return source;}:null;
   const afterLocalVerification=async({ticket,signal,check})=>{
     const installed=await codexInstallationProvider({ticket,signal});check();
+    await registerUserSkills({admitted:installedSkillsSource,ticket,signal,check:()=>{check();installed.assertCurrent();}});check();
     let requestedHooks=false;try{requestedHooks=memoryConsent.captureChoices().installOfficialHooks===true;}catch{}
     if(requestedHooks){
       const consent=await memoryConsent.requireCurrent({ticket,signal});
@@ -175,10 +179,11 @@ export async function createService({root,hostPackageRoot,dataDir=process.env.OR
   const coordinator=typeof contentSourceProvider==='function'?createOnboardingCoordinator({policy,vault,profileStore,dataDir,knowledge,sourceProvider:admittedContentSource,aiMemoryPhase:aiMemoryBackend?.phase,afterLocalVerification}):null;
   const updates=existsSync(join(root,'engine-source/provenance/oracle-distribution.json'))?(updateFactory||createPortableUpdateService)({bundleRoot:resolve(root),hostPackageRoot,dataDir,policy,vault,profileStore,knowledge,privateFilesystem,inspectPath:resolvedProviders.inspectPath,
     assertInstallerIdle(){installationOperation.assertIdle();if(coordinator?.snapshot().running)fail('onboarding_busy','Aguarde a conclusão da instalação.');},beforeSkillsInstall(){cancelMemory({cancelAI:false});skillsRouting.invalidate();skillsDiscoveryReceipt=null;},async afterSkillsInstall(context){
+      const registration=await registerUserSkills({...context,preservedPaths:context.receipt.conflicts.map(row=>row.path)});
       const account=await connection?.verifyActiveConnection();
-      if(!account?.connected||!account.explicitAuthorization)return {connected:false,discoveryVerified:false};
-      try{const memoryReady=await prepareRelayBinding(context);skillsDiscoveryReceipt=await skillsRouting.discover({signal:context.signal});return {connected:true,memoryReady,discoveryVerified:true};}
-      catch(error){return {connected:true,discoveryVerified:false,error:String(error.message)};}
+      if(!account?.connected||!account.explicitAuthorization)return {registration,connected:false,discoveryVerified:false};
+      try{const memoryReady=await prepareRelayBinding(context);skillsDiscoveryReceipt=await skillsRouting.discover({signal:context.signal});return {registration,connected:true,memoryReady,discoveryVerified:true};}
+      catch(error){return {registration,connected:true,discoveryVerified:false,error:String(error.message)};}
     }}):null;
   let exportEpoch=0;const exportControllers=new Set();
   const exports=typeof resolvedProviders.validatePNG==='function'&&typeof resolvedProviders.saveExportPNG==='function'?createExportBuffer({scope:()=>({dataDir,policy:policy.snapshot().generation,vault:vault.status(),epoch:exportEpoch}),assertAdmission:context=>policy.assertAdmission(context.ticket),decodePNG:resolvedProviders.validatePNG,savePNG:resolvedProviders.saveExportPNG}):null;

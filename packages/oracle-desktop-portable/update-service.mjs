@@ -33,7 +33,7 @@ export function createPortableUpdateService(options){
    if(!selected.selected)fail('vault_required','Escolha a pasta do Obsidian antes de atualizar o acervo.');if(!latestSkills)fail('skills_check_required','Consulte a atualização de skills primeiro.');
    const previous=await source.installed();check();record.status.phase='downloading';const stage=await source.download(latestSkills,scope);check();beforeSkillsInstall();check();
    const receipt=await transaction.install(stage,{...scope,previous,onProgress:progress=>{check();record.status={...record.status,...progress};}});check();record.status.receipt={created:receipt.created,replaced:receipt.replaced,unchanged:receipt.unchanged,conflicts:receipt.conflicts.length,obsoletePreserved:receipt.obsoletePreserved.length,recoveryPath:receipt.recoveryPath,complete:receipt.complete,indexComplete:receipt.indexComplete};
-   record.status.receipt.integration=await afterSkillsInstall(scope);check();
+   record.status.receipt.integration=await afterSkillsInstall({...scope,admitted:stage.admitted,receipt,check});check();
    record.status.skills={currentReleaseID:latestSkills.releaseID,latestReleaseID:latestSkills.releaseID,available:false,signatureVerified:true};record.status.phase='complete';
   }).catch(error=>{record.status.phase=controller.signal.aborted?'paused':'failed';record.status.error={code:String(error.code||'update_failed'),message:String(error.message||'Não foi possível atualizar.')};}).finally(()=>{record.status.running=false;});
   return knownStatus(params.requestID);

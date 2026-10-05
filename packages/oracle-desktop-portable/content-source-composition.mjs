@@ -5,6 +5,7 @@ import {join,resolve,dirname} from 'node:path';
 import {assertPrivatePath} from './profile-store.mjs';
 import {canonicalContentJSON,loadReviewedContentTrust,verifyPortableContentManifest,loadAdmittedContentFile,verifyContentFile} from './content-admission.mjs';
 import {createContentInstallationPlan} from './content-installation-plan.mjs';
+import {admitSkillsRelease} from './skills-release-admission.mjs';
 const fail=(code,message)=>{throw Object.assign(new Error(message),{code});};
 const sha=bytes=>createHash('sha256').update(bytes).digest('hex');
 const catalogPath='engine-source/provenance/oracle-distribution.json';
@@ -45,7 +46,8 @@ export function createPortableContentSource({bundleRoot,dataDir,profileStore,pol
   try{await policy.revalidateAdmission(ticket);check(ticket,signal);let envelope;try{envelope=await readBounded(envelopePath,24000000);}catch(error){if(error.code==='ENOENT')fail('distribution_unavailable','Envelope privado portable-content-v1 não acompanha esta distribuição.');throw error;}
    const profile=await profileStore.load();check(ticket,signal);const prior=profile.portableContentFeed??{};const admitted=verifyPortableContentManifest(envelope,{trust,minimumSequence:prior.sequence??0,knownManifestSHA256:prior.manifestSHA256});
    for(const row of admitted.manifest.files.filter(row=>!row.path.startsWith('content/'))){check(ticket,signal);loadAdmittedContentFile(admitted,row.path,bundleRoot);}
-   const plan=createContentInstallationPlan(admitted),transport=catalogTransport(loadAdmittedContentFile(admitted,catalogPath,bundleRoot),trust,admitted);
+   const provenance=loadAdmittedContentFile(admitted,catalogPath,bundleRoot),skills=admitSkillsRelease(provenance,{trust});
+   const plan=createContentInstallationPlan(admitted),transport=catalogTransport(provenance,trust,admitted);
    await assertPrivatePath(dataDir);const parent=join(dataDir,'content-staging');await fs.mkdir(parent,{recursive:true,mode:0o700});await assertPrivatePath(parent);stage=await fs.mkdtemp(join(parent,'verified-'));
    const save=async(path,bytes)=>{check(ticket,signal);verifyContentFile(admitted,path,bytes);const target=join(stage,path);await fs.mkdir(dirname(target),{recursive:true,mode:0o700});await assertPrivatePath(dirname(target));await fs.writeFile(target,bytes,{flag:'wx',mode:0o600});check(ticket,signal);};
    for(const entry of plan.entries.filter(row=>row.scope==='private-method'))await save(entry.source,loadAdmittedContentFile(admitted,entry.source,bundleRoot));
@@ -55,7 +57,7 @@ export function createPortableContentSource({bundleRoot,dataDir,profileStore,pol
     for(const row of document.files){const expected=transport.source.get(row.path);if(!expected||expected.package_id!==packageInfo.id||seen.has(row.path)||row.sha256!==expected.sha256||row.size!==expected.size||row.mode!==expected.mode)fail('catalog_inventory_mismatch','Arquivo não coincide com o inventário.');seen.add(row.path);await save('content/'+row.path,base64(row.content_base64));}if(seen.size!==packageInfo.files.length)fail('catalog_inventory_mismatch','Pacote incompleto.');
    }
    await policy.revalidateAdmission(ticket);check(ticket,signal);await profileStore.update(value=>{check(ticket,signal);const feed=value.portableContentFeed??{};if(feed.sequence>admitted.manifest.sequence||feed.sequence===admitted.manifest.sequence&&feed.manifestSHA256!==admitted.manifestSHA256)fail('content_rollback_rejected','A release mudou durante a instalação.');return {...value,portableContentFeed:{sequence:admitted.manifest.sequence,manifestSHA256:admitted.manifestSHA256,releaseID:admitted.manifest.release_id}};},{beforeCommit:()=>check(ticket,signal)});check(ticket,signal);
-   return Object.freeze({admitted,payloadRoot:stage,source:Object.freeze({fixture:false,completeInventory:false,completeInstallationPlan:true,catalogReleaseID:transport.releaseID,portableReleaseID:admitted.manifest.release_id,installed:false})});
+   return Object.freeze({admitted,skills,payloadRoot:stage,source:Object.freeze({fixture:false,completeInventory:false,completeInstallationPlan:true,catalogReleaseID:transport.releaseID,portableReleaseID:admitted.manifest.release_id,installed:false})});
   }catch(error){if(stage)await fs.rm(stage,{recursive:true,force:true});throw error;}finally{busy=false;}
  };
 }

@@ -42,8 +42,14 @@ export function admitSkillsRelease(input,{trust,minimumSequence=0,knownManifestS
   if(size!==row.expanded_bytes||size>32000000)fail('invalid_skills_package','Tamanho expandido divergente.');if(row.kind==='specialists')packages.push(Object.freeze({...row,files:Object.freeze([...row.files])}));
  }
  if(covered.size!==all.size||!packages.length)fail('invalid_skills_inventory','Pacotes não cobrem o inventário completo.');
+ const items=[],names=new Set(),entries=new Set();
+ if(document.items!==undefined&&(!Array.isArray(document.items)||document.items.length>30000))fail('invalid_skills_items','Catálogo de skills inválido.');
+ for(const row of (document.items||[]).filter(row=>row?.kind==='skill')){
+  if(!/^oracle-skill-[a-f0-9]{20}$/.test(row.host_name??'')||names.has(row.host_name)||typeof row.entry!=='string'||!row.entry.startsWith('SISTEMA/skills/')||!row.entry.endsWith('/SKILL.md')||entries.has(row.entry)||!Array.isArray(row.required_files)||!row.required_files.includes(row.entry)||!row.required_files.length||row.required_files.length>1000||new Set(row.required_files).size!==row.required_files.length||row.required_files.some(path=>all.get(path)?.kind!=='specialists'))fail('invalid_skills_items','Identidade ou arquivos da skill fora do inventário assinado.');
+  names.add(row.host_name);entries.add(row.entry);items.push(Object.freeze({hostName:row.host_name,entry:row.entry,requiredFiles:Object.freeze([...row.required_files])}));
+ }
  const files=document.files.filter(row=>row.kind==='specialists').map(row=>Object.freeze({...row}));
- const admitted=Object.freeze({releaseID:document.release_id,sequence:document.sequence,manifestSHA256:hash,signatureVerified:true,completeInventory:true,files:Object.freeze(files),packages:Object.freeze(packages)});
+ const admitted=Object.freeze({releaseID:document.release_id,sequence:document.sequence,manifestSHA256:hash,signatureVerified:true,completeInventory:true,files:Object.freeze(files),packages:Object.freeze(packages),items:Object.freeze(items)});
  admissions.set(admitted,new Map(files.map(row=>[row.path,row])));return admitted;
 }
 export function assertSkillsRelease(admitted){if(!admissions.has(admitted))fail('unadmitted_skills_release','Acervo sem admissão assinada.');return admitted;}

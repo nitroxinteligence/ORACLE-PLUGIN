@@ -8,6 +8,8 @@ Os ZIPs completos também estão nas [releases](https://github.com/nitroxintelig
 
 Dentro do Oracle, **Acervo** atualiza as skills da pasta selecionada, conserva edições locais e verifica o índice. **ORACLE** atualiza o plugin completo pelo host, incluindo componentes compatíveis dos repositórios originais [GBrain](https://github.com/garrytan/gbrain) e [AI Memory](https://github.com/akitaonrails/ai-memory). Licença, pasta, dados e consentimentos ficam no perfil do usuário.
 
+O onboarding registra as entradas do acervo assinado em `~/.agents/skills`, apontando para os arquivos originais do vault. O Codex pode usar as skills em seus projetos após atualizar a descoberta; se a lista continuar desatualizada, reinicie o Codex. O registro também acompanha atualizações do acervo, preserva conflitos e não inicia uma conversa ou conexão com conta. No Windows, o registro usa junctions de diretórios.
+
 Um push aprovado na fonte do aplicativo sincroniza somente os arquivos portáteis permitidos para este repositório. O workflow gera e verifica os pacotes completos. Uma verificação diária consulta os dois projetos originais. Alterações incompatíveis, migração recusada, assinatura inválida ou pacote acima do limite interrompem a publicação e preservam a release anterior. O acervo tem seu próprio workflow em [ORACLE-SKILLS](https://github.com/nitroxinteligence/ORACLE-SKILLS).
 
 Os binários e scripts dos projetos originais são preservados. A publicação inclui inventários assinados por Ed25519, digests dos arquivos e procedência dos componentes. A assinatura de distribuição não equivale à qualificação de execução do Windows. As validações de inicialização e migração usam perfis sintéticos, sem ativar hooks pessoais ou executar uma conversa com modelo.

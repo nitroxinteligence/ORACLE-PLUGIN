@@ -11,6 +11,7 @@
 <link rel="stylesheet" href="audit.css">
 <link rel="stylesheet" href="orbital-v3.css">
 <link rel="stylesheet" href="onboarding-v2.css">
+<link rel="stylesheet" href="interaction-stability.css">
 </head>
 <body>
 <svg width="0" height="0" aria-hidden="true" style="position:absolute;pointer-events:none"><defs><filter id="metallic-background-alpha" color-interpolation-filters="sRGB"><feColorMatrix type="matrix" values="1 0 0 0 0  0 1 0 0 0  0 0 1 0 0  16 16 16 0 -0.15"/></filter></defs></svg>
@@ -19,7 +20,6 @@
   <header class="app-header">
     <a class="wordmark" href="#" aria-label="Oracle, enquadrar meu universo"><span class="brand-lockup metallic-lockup" role="img" aria-label="Oracle"><img class="metallic-symbol" src="brand/oracle-planet-chrome-v1.png" alt=""><img class="metallic-wordmark" src="brand/lockup-white.svg" alt=""></span></a>
     <div class="header-actions">
-      <nav class="workspace-tabs" role="tablist" aria-label="Áreas do Oracle"><button id="workspace-graph" role="tab" aria-selected="true" aria-controls="graph-page" data-workspace="map" tabindex="0">Graph</button></nav>
       <button id="navigation-toggle" class="icon-button" aria-label="Meu universo" aria-controls="navigation-panel" aria-expanded="true" data-tooltip="Meu universo"><span data-icon="sidebar"></span></button>
 
 
@@ -34,7 +34,6 @@
       </div>
       <button id="settings" class="icon-button" aria-label="Configurações" data-tooltip="Configurações · ⌘,"></button>
       <button id="updates" class="icon-button update-button" aria-label="Atualizações" data-tooltip="Atualizações"><span data-icon="refresh"></span></button>
-      <button id="lock" class="icon-button" aria-label="Bloquear Oracle" data-tooltip="Bloquear Oracle · ⌘L"></button>
     </div>
   </header>
   <main>
@@ -43,7 +42,7 @@
       <div class="navigation-heading"><button id="search" class="search-trigger" aria-haspopup="dialog" aria-label="Buscar no universo" data-tooltip="Buscar notas e skills · ⌘K"><span data-icon="search"></span><span>Buscar no universo</span></button><button id="refresh" class="icon-button" aria-label="Reler pasta" data-tooltip="Reler os arquivos da pasta"><span data-icon="refresh"></span></button></div>
       <div id="tree" class="tree"></div>
     </aside>
-    <section id="graph-page" class="stage" role="tabpanel" aria-labelledby="workspace-graph" aria-label="Atlas do conhecimento">
+    <section id="graph-page" class="stage" aria-label="Atlas do conhecimento">
       <div id="atlas"></div>
       <div id="results" hidden></div>
       <div class="map-tools" role="group" aria-label="Navegação do atlas">
@@ -79,6 +78,5 @@
 <dialog id="modal" aria-labelledby="modal-title"><div id="modal-content"></div></dialog>
 <div id="tooltip" role="tooltip" hidden></div>
 <div id="toast" role="status" aria-live="polite" hidden></div>
-<div id="lock-screen" hidden><div class="lock-card"><div class="wordmark"><img class="brand-lockup" src="brand/lockup-white.svg" alt="Oracle"></div><h1>Seu universo, reservado.</h1><p>Use Touch ID ou a senha do macOS para continuar.</p><button id="unlock" class="primary">Desbloquear Oracle</button><small>A proteção bloqueia esta interface. Seu vault continua acessível pelo Obsidian.</small></div></div>
-<script src="status-badges.js"></script><script src="vendor/marked.js"></script><script src="reader.js"></script><script src="preview.js"></script><script src="universe.js"></script><script src="flat-universe.js"></script><script src="replay.js"></script><script src="portraits.js"></script><script src="atlas.js"></script><script src="installation-visual.js"></script><script src="transitions.js"></script><script src="onboarding.js"></script><script src="effects/onboarding.js"></script><script src="onboarding-v2.js"></script><script src="knowledge-prompts.js"></script><script src="knowledge-hub.js"></script><script src="ui-controls.js"></script><script src="plugin-bridge.js"></script><script src="portable-updates.js"></script><script src="ui-recovery.js"></script><script src="app.js"></script>
+<script src="status-badges.js"></script><script src="vendor/marked.js"></script><script src="reader.js"></script><script src="preview.js"></script><script src="universe.js"></script><script src="flat-universe.js"></script><script src="replay.js"></script><script src="portraits.js"></script><script src="atlas.js"></script><script src="installation-visual.js"></script><script src="transitions.js"></script><script src="onboarding.js"></script><script src="effects/onboarding.js"></script><script src="onboarding-v2.js"></script><script src="knowledge-prompts.js"></script><script src="knowledge-hub.js"></script><script src="ui-controls.js"></script><script src="plugin-bridge.js"></script><script src="portable-updates.js"></script><script src="ui-recovery.js"></script><script src="action-feedback.js"></script><script src="app.js"></script>
 </body></html>

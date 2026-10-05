@@ -42,6 +42,7 @@ class OracleAtlas {
     this.contextNav=this.el.querySelector('.atlas-context');
     const tabs=document.querySelector('.workspace-tabs');
     if(tabs){let navigation=tabs.closest('.workspace-navigation');if(!navigation){navigation=document.createElement('div');navigation.className='workspace-navigation';tabs.before(navigation);navigation.append(tabs)}navigation.prepend(this.contextNav)}
+    else{const controls=document.querySelector('.header-actions');if(controls){let navigation=controls.querySelector('.workspace-navigation');if(!navigation){navigation=document.createElement('div');navigation.className='workspace-navigation';controls.prepend(navigation)}navigation.append(this.contextNav)}}
     this.svg=this.el.querySelector('svg');this.world=this.el.querySelector('.atlas-camera');this.edgeLayer=this.el.querySelector('.atlas-edges');this.nodeLayer=this.el.querySelector('.atlas-nodes');this.leafLayer=this.el.querySelector('.atlas-leaves');this.groupLayer=this.el.querySelector('.atlas-groups');
     this.contextBackdrop=this.make('g',{class:'department-backdrop','aria-hidden':'true',display:'none'},this.svg);this.svg.insertBefore(this.contextBackdrop,this.world);
     this.contextRings=Array.from({length:5},()=>this.make('circle',{class:'department-backdrop-ring'},this.contextBackdrop));
@@ -778,12 +779,12 @@ class OracleAtlas {
   renderContextBackdrop(){
     if(!this.contextBackdrop)return;
     const department=this.knowledge?null:this.catalog?.departmentByID.get(this.department||this.catalog?.specialistByID.get(this.selected)?.department);
-    const active=!!department&&(!!this.department||!!this.selected),key=active?department.id:null,changed=key!==this.backdropDepartment;
+    const active=!this.knowledge,key=active?(department?.id||'oracle'):null,changed=key!==this.backdropDepartment;
     this.backdropDepartment=key;this.contextBackdrop.setAttribute('display',active?'inline':'none');
     if(!active||!this.viewport)return;
     const {cx,cy,width,height}=this.viewport;
     this.contextBackdrop.setAttribute('transform',`translate(${cx} ${cy})`);
-    this.contextTitle.textContent=department.name.toLocaleUpperCase('pt-BR');
+    this.contextTitle.textContent=department?department.name.toLocaleUpperCase('pt-BR'):'ORACLE';
     const size=Math.min(116,width*.8/(this.contextTitle.textContent.length*.95));
     this.contextTitle.setAttribute('font-size',size);
     const measured=this.contextTitle.getComputedTextLength();if(measured>width*.86)this.contextTitle.setAttribute('font-size',size*width*.86/measured);

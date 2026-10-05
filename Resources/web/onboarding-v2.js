@@ -111,12 +111,14 @@
     clean(host);
     if(current.hasVault){
       host.innerHTML='<div class="ob2-selected-vault">'+folder+'<div><strong>'+esc(current.vaultName)+'</strong><span>'+esc(current.vaultPath||current.vaultName)+'</span></div><button type="button" class="ob2-change-vault icon-button" aria-label="Trocar pasta" title="Trocar pasta"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M4 8h16m-4-4 4 4-4 4M20 16H4m4-4-4 4 4 4"/></svg></button></div>';
-      host.querySelector('.ob2-change-vault').onclick=()=>run(async()=>{const selected=await invoke('onboardingChooseVault');if(selected){current=await invoke('onboardingStatus');updateVaultSelection();}});
+      host.querySelector('.ob2-change-vault').onclick=()=>run(async()=>{const selected=await invoke('onboardingChooseVault');if(selected){current=await invoke('onboardingStatus');updateVaultSelection();api.toast?.('Vault selecionado.','success');}});
     }else{
       host.innerHTML='<div class="ob2-vault">'+folder+'<span class="ob2-vault-name">Escolha o vault que receberá os arquivos</span><div class="ob2-vault-action" data-ob2-effect></div></div>';
-      metal(host.querySelector('[data-ob2-effect]'),'Escolher pasta',async()=>{const selected=await invoke('onboardingChooseVault');if(selected){current=await invoke('onboardingStatus');updateVaultSelection();}});
+      metal(host.querySelector('[data-ob2-effect]'),'Escolher pasta',async()=>{const selected=await invoke('onboardingChooseVault');if(selected){current=await invoke('onboardingStatus');updateVaultSelection();api.toast?.('Vault selecionado.','success');}});
     }
-    metal(action,'Prosseguir',()=>navigate('install'),!current.hasVault);
+    clean(action);action.hidden=!destination(current);
+    if(!action.hidden)metal(action,'Prosseguir',()=>navigate('install'));
+    else action.replaceChildren();
   }
   function positionProgress(){
     if(!progress||progress.hidden)return;
@@ -182,10 +184,10 @@
     if(portableIntegration&&!repair&&!actions.querySelector('button')){
       plain(actions.querySelector('[data-dismiss-integration]'),'Continuar no Oracle',()=>{dismissedIntegrations.add(integrationKey());updateProgress();});
       if(current.integrationActions.includes('connect'))plain(actions.querySelector('[data-open-codex]'),'Conectar ao Codex',async()=>{
-        const value=await invoke('onboardingConnect');current=await invoke('onboardingStatus');integrationMessage=value.message||current.integrationMessage||'';updateProgress();await api.refresh?.();
+        const value=await invoke('onboardingConnect');current=await invoke('onboardingStatus');integrationMessage=value.message||current.integrationMessage||'';updateProgress();api.toast?.(integrationMessage||'Conexão com o Codex verificada.','success');await api.refresh?.();
       });
       if(current.integrationActions.includes('discover'))plain(actions.querySelector('[data-verify-codex]'),'Verificar skills',async()=>{
-        await invoke('onboardingVerifyCodex');current=await invoke('onboardingStatus');integrationMessage=current.integrationMessage||'Skills descobertas pelo Codex. Execução e autorização dos hooks têm verificações próprias.';updateProgress();await api.refresh?.();
+        await invoke('onboardingVerifyCodex');current=await invoke('onboardingStatus');integrationMessage=current.integrationMessage||'Skills descobertas pelo Codex. Execução e autorização dos hooks têm verificações próprias.';updateProgress();api.toast?.(integrationMessage,'success');await api.refresh?.();
       });
     }
     if(portableIntegration&&!repair){
@@ -196,7 +198,7 @@
     }
     if(integrating&&!portableIntegration&&!repair&&!actions.querySelector('button')){
       plain(actions.querySelector('[data-open-codex]'),'Abrir Codex',async()=>{await invoke('onboardingOpenIntegrationCodex');});
-      plain(actions.querySelector('[data-copy-codex]'),'Copiar instruções',async()=>{const value=await invoke('maintenanceScheduleRequest');await invoke('copy',{text:value.request});api.toast?.('Instruções copiadas. Envie-as em uma conversa no espaço Oracle.');});
+      plain(actions.querySelector('[data-copy-codex]'),'Copiar instruções',async()=>{const value=await invoke('maintenanceScheduleRequest');await invoke('copy',{text:value.request});});
       plain(actions.querySelector('[data-verify-codex]'),'Verificar',async()=>{
         const button=actions.querySelector('[data-verify-codex] button');button.disabled=true;button.textContent='Verificando…';
         try {const value=await invoke('onboardingVerifyIntegration');current=value;integrationMessage=value.integrationMessage||'';updateProgress();api.toast?.(integrationMessage||'Verificação concluída.');await api.refresh?.();}

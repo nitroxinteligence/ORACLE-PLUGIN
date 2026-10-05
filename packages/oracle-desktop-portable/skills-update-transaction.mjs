@@ -23,13 +23,15 @@ async function targetPath(root,path,{check,inspectPath}){
 /** Only unchanged files in an authenticated prior inventory can be replaced.
  * Edited/unmanaged files stay in place; incoming versions and backups remain
  * in private state. Obsolete files stay in the vault. Retry rechecks every file,
- * and an independent complete index is required before committing the release. */
+ * and an independent complete index plus installer integration are required
+ * before committing the release. */
 export function createSkillsUpdateTransaction({vault,policy,profileStore,dataDir,knowledge,inspectPath,privateFilesystem,afterFile}={}){
  if(!vault?.withContentTransaction||!knowledge?.refresh)fail('skills_update_unavailable','Atualização do acervo não configurada.');
- return Object.freeze({async install(stage,{previous,ticket,signal,onProgress=()=>{}}={}){
+ return Object.freeze({async install(stage,{previous,ticket,signal,onProgress=()=>{},afterIndexVerified}={}){
+  if(afterIndexVerified!==undefined&&typeof afterIndexVerified!=='function')fail('skills_update_unavailable','Verificação final da atualização indisponível.');
   assertSkillsStage(stage);assertSkillsRelease(previous);if(ticket?.capability!=='configure')fail('access_denied','Atualização exige autorização de configuração.');
   const admitted=stage.admitted;assertSkillsRelease(admitted);if(admitted.sequence<previous.sequence)fail('skills_rollback','A versão não pode regredir.');
-  const old=new Map(previous.files.map(row=>[row.path,row]));let receipt;
+  const old=new Map(previous.files.map(row=>[row.path,row])),selection=vault.status();let receipt;
   await vault.withContentTransaction(async grant=>{
    const check=()=>{grant.check();policy.assertAdmission(ticket);if(signal?.aborted)fail('operation_cancelled','Atualização cancelada.');};
    const current=async()=>{check();await grant.checkRoot();await policy.revalidateAdmission(ticket);check();};await current();await assertPrivatePath(dataDir,{privateFilesystem});
@@ -58,12 +60,16 @@ export function createSkillsUpdateTransaction({vault,policy,profileStore,dataDir
    }catch(error){try{check();receipt.interrupted=true;await checkpoint();}catch{}throw error;}
   },{signal});
   // Release the canonical writer before the indexer's independent enumeration.
-  policy.assertAdmission(ticket);if(signal?.aborted)fail('operation_cancelled','Atualização cancelada.');onProgress({phase:'indexing'});
-  const index=await knowledge.refresh({signal});policy.assertAdmission(ticket);
+  const check=()=>{policy.assertAdmission(ticket);if(signal?.aborted)fail('operation_cancelled','Atualização cancelada.');const active=vault.status();if(!active.selected||active.root!==receipt.vault||active.generation!==selection.generation)fail('skills_vault_changed','A pasta selecionada mudou.');};
+  check();onProgress({phase:'indexing'});
+  const index=await knowledge.refresh({signal});check();
   if(index?.complete!==true)fail('skills_index_partial','Os arquivos foram atualizados, mas o índice está parcial. Retome para concluir.');
-  if(vault.status().root!==receipt.vault)fail('skills_vault_changed','A pasta selecionada mudou.');
-  receipt.indexComplete=true;receipt.complete=true;
-  await profileStore.update(value=>({...value,skillsInstallation:receipt,skillsUpdatePending:null}),{beforeCommit:()=>{policy.assertAdmission(ticket);if(signal?.aborted||vault.status().root!==receipt.vault)fail('skills_vault_changed','A autorização mudou.');}});
+  receipt.indexComplete=true;
+  await profileStore.update(value=>({...value,skillsUpdatePending:receipt}),{beforeCommit:check});check();
+  if(afterIndexVerified){onProgress({phase:'registering'});await afterIndexVerified(receipt);check();}
+  const completed={...receipt,complete:true};
+  await profileStore.update(value=>({...value,skillsInstallation:completed,skillsUpdatePending:null}),{beforeCommit:check});
+  receipt=completed;
   return Object.freeze(receipt);
  }});
 }

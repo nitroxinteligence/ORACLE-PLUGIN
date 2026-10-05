@@ -8,6 +8,16 @@ const fail=(code,message)=>{throw Object.assign(new Error(message),{code});};
 const identity=info=>[info.dev,info.ino].join(':');
 const stable=info=>[identity(info),info.size,info.mtimeMs,info.ctimeMs].join(':');
 
+/** Registration is required for readiness; optional account discovery and model
+ * execution are separate proofs and cannot turn partial registration into success. */
+export function assertCompleteCodexUserSkillsRegistration(admitted,registration){
+ assertSkillsRelease(admitted);
+ if(!admitted.items.length)fail('codex_skills_catalog_missing','O acervo assinado não contém entradas de skills para o Codex.');
+ if(registration?.skippedPreserved>0)fail('codex_skills_registration_partial',`${registration.skippedPreserved} skills editadas foram preservadas. O registro da nova versão no Codex ficou incompleto. Confira as versões recebidas na pasta de recuperação e tente novamente.`);
+ if(registration?.complete!==true||registration.registrationVerified!==true||registration.releaseID!==admitted.releaseID||registration.registered!==admitted.items.length)fail('codex_skills_registration_partial','O registro completo das skills no Codex não foi confirmado. Tente novamente.');
+ return registration;
+}
+
 /** Trusted installer composition, never an RPC path. Register signed curated
  * entrypoints in Codex USER scope after local verification, without copying
  * originals, touching account/config or granting connection/hook consent.

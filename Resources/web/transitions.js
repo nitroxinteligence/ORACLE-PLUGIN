@@ -75,7 +75,7 @@ window.OracleTransitions=(()=>{
   const surfaces=[
    ['.app-header>.wordmark',0,0,-7],['#navigation-panel',100,-10,0],
    ['.workspace-tabs',150,0,-7],['#navigation-toggle',210,0,-6],
-   ['#settings',250,0,-6],['#updates',290,0,-6],['#lock',330,0,-6],
+   ['#settings',250,0,-6],['#updates',290,0,-6],
    ['.map-tools',280,0,9],['#observatory-panel',210,10,0],['#footer-status',350,0,5]
   ];
   const entrances=surfaces.map(([selector,delay,x,y])=>{

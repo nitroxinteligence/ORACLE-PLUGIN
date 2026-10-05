@@ -25,7 +25,7 @@ import {createCodexHostProvider} from './codex-host-provider.mjs';
 import {createCodexSkillsRouting} from './codex-skills-routing.mjs';
 import {createOfficialHooksInstaller} from './official-hooks-installer.mjs';
 import {createCodexInstallationProvider} from './codex-installation-provider.mjs';
-import {createCodexUserSkillsRegistration} from './codex-user-skills-registration.mjs';
+import {createCodexUserSkillsRegistration,assertCompleteCodexUserSkillsRegistration} from './codex-user-skills-registration.mjs';
 import {createHostHookAuthority,createHostCaptureProvider} from './host-capture-provider.mjs';
 import {createPortableContentSource} from './content-source-composition.mjs';
 import {createPortableAccessGrantResolver} from './access-grant-composition.mjs';
@@ -82,7 +82,8 @@ export async function createService({root,hostPackageRoot,dataDir=process.env.OR
   if(typeof profile.license==='string') {
     try{await policy.activate(profile.license);}catch{/* Invalid/unsupported legacy bindings stay inactive. */}
   }
-  if(profile.locked===true)policy.block();
+  // Legacy interface-lock preferences no longer affect admission. Licensing,
+  // vault selection and transport teardown still own their independent gates.
   const resolvedProviders=providers||await createPlatformHostProviders();
   const capabilities=createHostCapabilities({providers:resolvedProviders,host,runtime:{name:process.versions.bun?'Bun':'Node.js',version:process.versions.bun||process.versions.node}});
   let pickerSignal,pickerBusy=false;
@@ -168,7 +169,8 @@ export async function createService({root,hostPackageRoot,dataDir=process.env.OR
   const admittedContentSource=typeof contentSourceProvider==='function'?async options=>{const source=await contentSourceProvider(options);if(pendingMemoryInstallation)await memoryConsent.admitInstallation(pendingMemoryInstallation,source.admitted,options);codexInstallationProvider.admit?.(source,options);installedSkillsSource=source.skills;return source;}:null;
   const afterLocalVerification=async({ticket,signal,check})=>{
     const installed=await codexInstallationProvider({ticket,signal});check();
-    await registerUserSkills({admitted:installedSkillsSource,ticket,signal,check:()=>{check();installed.assertCurrent();}});check();
+    const registration=await registerUserSkills({admitted:installedSkillsSource,ticket,signal,check:()=>{check();installed.assertCurrent();}});check();
+    assertCompleteCodexUserSkillsRegistration(installedSkillsSource,registration);
     let requestedHooks=false;try{requestedHooks=memoryConsent.captureChoices().installOfficialHooks===true;}catch{}
     if(requestedHooks){
       const consent=await memoryConsent.requireCurrent({ticket,signal});
@@ -249,21 +251,13 @@ saveVersion:async(p,c)=>{if(Object.keys(p).some(key=>!['path','hash','text'].inc
     snapshot:async p=>{noArgs(p);const value=await createSnapshot({policy,vault,profileStore,catalog,dataDir,knowledge,libraryPending:installationOperation.snapshot()?.running===true||coordinator?.snapshot().running===true||updates?.snapshot().running===true});value.features.portableUpdates=!!updates;value.onboarding=await status();return value;},
     onboardingActivate:async(p,c)=>{
       if(Object.keys(p).some(key=>key!=='code')||typeof p.code!=='string')fail('invalid_access_key','Confira sua chave de acesso.');
-      if(policy.snapshot().blocked)fail('access_denied','Desbloqueie o Oracle antes de ativar.');
+      if(policy.snapshot().blocked)fail('access_denied','Reabra o Oracle antes de ativar.');
       const activationGeneration=policy.snapshot().generation;const beforeAccept=()=>{if(c.signal?.aborted)fail('operation_cancelled','Ativação cancelada.');if(policy.snapshot().blocked||policy.snapshot().generation!==activationGeneration)fail('stale_admission','O acesso mudou durante a ativação.');};
       let signed;
       if(p.code.trim().startsWith('ORACLE2.')){signed=p.code.trim();await policy.activate(signed);}
       else await policy.activateAccessKey(p.code,async hash=>{signed=await resolveGrant(hash,{signal:c.signal,beforeAccept});return signed;});
       try{const ticket=policy.requireCapability('configure');await profileStore.update(value=>({...value,license:signed}),{beforeCommit:()=>policy.assertAdmission(ticket)});}catch(error){policy.revoke();vault.revoke();throw error;}
       const access=policy.snapshot();return {valid:access.active,role:access.role,capabilities:access.capabilities};
-    },
-    lock:async p=>{noArgs(p);capabilities.require('localAuthentication');const ticket=policy.requireCapability('useOracle');await policy.revalidateAdmission(ticket);await profileStore.update(value=>({...value,locked:true}),{beforeCommit:()=>policy.assertAdmission(ticket)});disconnectMemory();cancelExports();coordinator?.cancel();knowledge.cancel();policy.block();return true;},
-    unlock:async p=>{
-      noArgs(p);const generation=policy.snapshot().generation,authenticate=capabilities.require('localAuthentication');
-      const proof=await authenticate();if(proof?.authenticated!==true)fail('authentication_failed','A autenticação local não foi confirmada.');
-      if(policy.snapshot().generation!==generation)fail('stale_admission','A autorização mudou durante a autenticação.');
-      await profileStore.update(value=>({...value,locked:false}),{beforeCommit:()=>{if(policy.snapshot().generation!==generation)fail('stale_admission','A autorização mudou durante a autenticação.');}});
-      policy.unblock();return true;
     },
     revoke:async p=>{noArgs(p);disconnectMemory();cancelExports();coordinator?.cancel();knowledge.cancel();vault.revoke();return true;},
     memoryStatus:async p=>{noArgs(p);return knowledge.status();},
@@ -315,7 +309,7 @@ saveVersion:async(p,c)=>{if(Object.keys(p).some(key=>!['path','hash','text'].inc
     copy:async(p,context)=>{if(Object.keys(p).some(key=>key!=='text')||typeof p.text!=='string'||Buffer.byteLength(p.text)>2_000_000||Buffer.from(p.text,'utf8').toString('utf8')!==p.text)fail('invalid_request','Texto inválido.');return hostAction(context,()=>capabilities.require('clipboard')(p.text,{signal:context.signal}));},
     openExternal:async(p,context)=>{if(Object.keys(p).some(key=>key!=='url'))fail('invalid_request','Link externo inválido.');const url=validatedExternalURL(p.url);return hostAction(context,()=>capabilities.require('openExternal')(url,{signal:context.signal}));},
   };
-  const publicMethods=new Set(['boot','onboardingStatus','onboardingActivate','unlock','lock','copy','openExternal']);
+  const publicMethods=new Set(['boot','onboardingStatus','onboardingActivate','copy','openExternal']);
   const dispatcher=createDispatcher({handlers,authorize:async(request,work)=>{
     if(publicMethods.has(request.method))return work();
     if(request.method==='snapshot'&&!policy.snapshot().active&&!policy.snapshot().blocked)return work();

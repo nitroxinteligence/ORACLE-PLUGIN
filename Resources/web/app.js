@@ -4,15 +4,16 @@ const paths={lock:'M6 10h12v11H6z M8 10V6a4 4 0 0 1 8 0v4 M12 14v3',folder:'M3 6
 Object.assign(paths,{orbit:'M4 12a8 8 0 1 0 16 0a8 8 0 1 0-16 0 M2 17c2 3 21-6 20-10s-21 5-20 10',sidebar:'M3 4h18v16H3z M9 4v16',history:'M3 11a9 9 0 1 1 2 7 M3 4v7h7 M12 7v5l3 2',observatory:'M3 12s3-7 9-7 9 7 9 7-3 7-9 7-9-7-9-7 M15 12a3 3 0 1 1-6 0 3 3 0 0 1 6 0',minimize:'M5 12h14',play:'M8 5l12 7-12 7Z',pause:'M8 5v14 M16 5v14',refresh:'M20 7a9 9 0 1 0 1 8 M20 2v6h-6',live:'M12 8v8 M8 12h8 M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0',fit:'M8 3H3v5 M16 3h5v5 M3 16v5h5 M21 16v5h-5 M8 12h8 M12 8v8',back:'M9 5l-6 6 6 6 M3 11h12a6 6 0 0 1 6 6',close:'M6 6l12 12 M18 6L6 18',chevron:'M9 5l7 7-7 7',check:'M5 12l4 4L19 6'});
 function icon(name,cls=''){return `<svg class="${cls}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="${paths[name]||paths.note}"/></svg>`}
 function esc(v){return String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}
-$$('[data-icon]').forEach(e=>e.outerHTML=icon(e.dataset.icon));$('#settings').innerHTML=icon('sliders');$('#lock').innerHTML=icon('lock');
-const pending=new Map();let requestID=0;
-function call(method,params={}){if(window.OraclePluginBridge?.active())return window.OraclePluginBridge.call(method,params);return new Promise((resolve,reject)=>{
+$$('[data-icon]').forEach(e=>e.outerHTML=icon(e.dataset.icon));$('#settings').innerHTML=icon('sliders');
+const pending=new Map();let requestID=0,interfaceSuspended=false;
+function request(method,params={}){if(window.OraclePluginBridge?.active())return window.OraclePluginBridge.call(method,params);return new Promise((resolve,reject)=>{
  if(!window.webkit?.messageHandlers.oracle){reject(Error('O aplicativo macOS é necessário. Este arquivo não é um app web.'));return}
  if(pending.size>=128){reject(Error('Há operações demais em andamento. Aguarde as respostas atuais.'));return}
  const id=String(++requestID),timeout=setTimeout(()=>{pending.delete(id);reject(Error('A operação não respondeu a tempo. Confira o estado antes de repetir.'));},['gbrainRead','onboardingConnect','codexPlugins','codexPluginsRefresh'].includes(method)?120000:90000);
  pending.set(id,{resolve,reject,timeout});
  try{window.webkit.messageHandlers.oracle.postMessage({id,method,params})}catch(error){clearTimeout(timeout);pending.delete(id);reject(error)}
 })}
+function call(method,params={},label){return request(method,params).then(value=>{OracleActionFeedback.completed(method,value,{label,toast});return value;});}
 window.oracleReply=(id,res)=>{const p=pending.get(id);if(!p)return;pending.delete(id);clearTimeout(p.timeout);res.error?p.reject(Error(res.error)):p.resolve(res.value)};
 let state={entries:[],collections:[],events:[],config:{}},selected=null,view='map',query='',zoom=OracleAtlas.DEFAULT_ZOOM,replay=false,cursor=0,timer=null,speed=1,readDocument=null;
 const colors=['#dba17c','#91b5ed','#7bc8b4','#d9c276','#b29bd7','#92c399','#d49cae'];
@@ -20,10 +21,10 @@ const positions=[[292,132],[564,130],[678,313],[164,310],[248,491],[600,485],[42
 let modalOrigin=null, modalRevision=0, modalDirty=false, settingsTrail=false;
 let navigationEpoch=0,noteReadSequence=0,refreshSequence=0,refreshTask=null;
 let initialScanTimer=null,initialScanRetries=0,memoryPollTask=null,memoryEpoch=0,lastMemorySignature='';
-const navigationBlocked=()=>!$('#lock-screen').hidden||!!document.querySelector('.ob-dialog[open]')||modalDirty;
+const navigationBlocked=()=>interfaceSuspended||!!document.querySelector('.ob-dialog[open]')||modalDirty;
 let modalSequence=0,modalHistory=[],modalPage=null;
 function toast(text,tone='info'){
- if(!$('#lock-screen').hidden)return;
+ if(interfaceSuspended)return;
  const notice=$('#toast'),revision=(toast.revision||0)+1;toast.revision=revision;OracleTransitions.cancel(notice);const dialog=document.querySelector('.ob2-activation[open],.ob2-screen[open],.ob-dialog[open]')||$('#modal');
  if(typeof notice.hidePopover==='function'&&notice.matches(':popover-open'))notice.hidePopover();
  (dialog?.open?dialog:document.body).append(notice);
@@ -52,31 +53,29 @@ function modalBack(index=modalHistory.length-1){
   navigationEpoch++;
   readDocument=prior.document;editorSession=prior.editor;settingsTrail=prior.settings;
   modalDirty=prior.dirty;hideTooltip();
-  const previous=OracleTransitions.captureContent($('#modal-content'));
+  OracleTransitions.cancel($('#modal-content'));
   $('#modal-content').style.height='';
   $('#modal-content').replaceChildren(...prior.nodes);$('#modal').dataset.family=prior.family;
   const breadcrumb=modalBreadcrumb(),oldBreadcrumb=$('#modal-content .modal-breadcrumb');if(oldBreadcrumb){breadcrumb?oldBreadcrumb.replaceWith(breadcrumb):oldBreadcrumb.remove()}else if(breadcrumb)$('.modal-header>div').prepend(breadcrumb);
   const body=$('.modal-body');if(body)body.scrollTop=prior.scroll;
   const focus=prior.focus?.isConnected?prior.focus:$('#modal-title');focus?.focus({preventScroll:true});
-  void OracleTransitions.content($('#modal-content'),previous);
  };
  // Review -> editor preserves the same draft; leaving that draft uses the existing exit guard.
  if(modalDirty&&!(prior?.family==='editor'&&prior.editor===editorSession)){requestEditorExit(false,restore);return}
  restore();
 }
 function modal(html,options={}){
- if(!$('#lock-screen').hidden||document.querySelector('.ob-dialog[open]'))return false;
+ if(interfaceSuspended||document.querySelector('.ob-dialog[open]'))return false;
  if(modalDirty&&options.family!=='editor'){requestEditorExit(false,()=>modal(html,options));return false}
  const dialog=$('#modal'), content=$('#modal-content'),opening=!dialog.open;
  content.inert=false;
  OracleTransitions.cancelDialog(dialog,{preserveEntrance:true});
- const previousKey=modalPage?.key;
+ OracleTransitions.cancel(content);
  content.style.height='';
  if(options.root){modalHistory=[];modalPage=null;}
  const template=document.createElement('template');template.innerHTML=html;
  const heading=template.content.querySelector('h1')||document.createElement('h1');heading.id='modal-title';heading.tabIndex=-1;
  const key=options.key||heading.textContent;
- const previous=opening||previousKey===key?null:OracleTransitions.captureContent(content);
  if(!dialog.open){modalOrigin=document.activeElement;modalHistory=[];modalPage=null}
  if(modalPage){
   const ancestor=modalHistory.findIndex(page=>page.key===key);
@@ -100,7 +99,7 @@ function modal(html,options={}){
  if(family==='reader'&&!body.querySelector('.reader-layout')){const article=body.querySelector('.markdown-reader');if(article){const layout=document.createElement('div');layout.className='reader-layout';article.before(layout);const outline=document.createElement('nav');outline.className='reader-outline';outline.hidden=true;outline.setAttribute('aria-label','Seções do documento');layout.append(outline,article);mountReaderOutline();}}
  dialog.append($('#tooltip'));if(!dialog.open)dialog.showModal();
  const focus=options.focus?content.querySelector(options.focus):body.querySelector('input:not([type=checkbox]),textarea,select');(focus||heading).focus({preventScroll:true});
- if(opening)OracleTransitions.enterDialog(dialog);else if(previous)void OracleTransitions.content(content,previous);
+ if(opening)OracleTransitions.enterDialog(dialog);
  return true;
 }
 function closeModal(force=false){
@@ -129,26 +128,26 @@ function entryLocation(e){const collection=state.collections.find(c=>OracleDepar
 async function refresh(){
  if(refreshTask)return refreshTask;
  const sequence=++refreshSequence;
- const task=(async()=>{const next=await call('snapshot');if(sequence!==refreshSequence||!$('#lock-screen').hidden)return;
+ const task=(async()=>{const next=await call('snapshot');if(sequence!==refreshSequence||interfaceSuspended)return;
   const librariesChanged=state.scan?.signature!==next.scan?.signature||state.scan?.pending!==next.scan?.pending||state.scan?.complete!==next.scan?.complete||state.scanError!==next.scanError||JSON.stringify(state.config.libraryRoots)!==JSON.stringify(next.config.libraryRoots);
   const scanErrorChanged=state.scanError!==next.scanError;
   state=next;applyVisualPreferences(false);render();
   if(librariesChanged){window.OracleKnowledgeHub.refresh?.(state.entries);}
   void maybeShowKnowledgeWelcome();
   if(!window.ORACLE_PREVIEW&&state.features?.portableUpdates&&state.onboarding?.status==='completed')void window.OraclePortableUpdates.automatic({call,toast});
-  if(!updateBusy){const generation=updateGeneration;void pollUpdateStatus().then(status=>{if(!status||generation!==updateGeneration||sequence!==refreshSequence||!$('#lock-screen').hidden)return;maybeAutomaticUpdateCheck(status)});}if(state.scanError&&scanErrorChanged)toast(state.scanError);
+  if(!updateBusy){const generation=updateGeneration;void pollUpdateStatus().then(status=>{if(!status||generation!==updateGeneration||sequence!==refreshSequence||interfaceSuspended)return;maybeAutomaticUpdateCheck(status)});}if(state.scanError&&scanErrorChanged)toast(state.scanError);
   clearTimeout(initialScanTimer);if(state.scan?.pending&&initialScanRetries++<20)initialScanTimer=setTimeout(()=>safe(refresh)(),750);else if(!state.scan?.pending)initialScanRetries=0;
  })();
  refreshTask=task;try{return await task}finally{if(refreshTask===task)refreshTask=null}
 }
 async function refreshVault(){if(state.config.vault&&state.onboarding?.licensed)await call('memoryRefresh');return refresh();}
 async function mountOnboarding(){
- try{if(!window.ORACLE_PREVIEW)await window.OracleOnboarding?.mount({call,refresh,getState:()=>state,toast,openSettings:settings,canOpen:()=>$('#lock-screen').hidden&&!$('#modal').open&&!modalDirty});window.OracleUIRecovery?.clear();}
+ try{if(!window.ORACLE_PREVIEW)await window.OracleOnboarding?.mount({call,refresh,getState:()=>state,toast,openSettings:settings,canOpen:()=>!interfaceSuspended&&!$('#modal').open&&!modalDirty});window.OracleUIRecovery?.clear();}
  catch(error){window.OracleUIRecovery?.show(error,recoverInterface);throw error;}
 }
 async function recoverInterface(){
  const boot=await call('boot');applyAccessibility(boot.accessibility);
- if(boot.locked){window.OracleUIRecovery?.clear();window.oracleLock();return;}
+ if(boot.locked)throw Error('O acesso ao Oracle foi interrompido. Reabra o aplicativo.');
  $('#app').inert=false;await refresh();await mountOnboarding();void OracleTransitions.enterApp();if(view==='map'&&graphEntrancePending)requestGraphEntrance();finishUpdateStartup();
 }
 function render(){
@@ -166,9 +165,9 @@ function renderMemoryStatus(){
 }
 async function pollMemoryStatus(){
  if(memoryPollTask)return memoryPollTask;
- if(!$('#lock-screen').hidden||document.hidden||window.oracleWindowVisible===false||!state.onboarding?.licensed||!state.config.vault)return;
+ if(interfaceSuspended||document.hidden||window.oracleWindowVisible===false||!state.onboarding?.licensed||!state.config.vault)return;
  const epoch=memoryEpoch,vault=state.config.vault;
- const current=()=>epoch===memoryEpoch&&$('#lock-screen').hidden&&state.config.vault===vault;
+ const current=()=>epoch===memoryEpoch&&!interfaceSuspended&&state.config.vault===vault;
  const task=(async()=>{
   try{
    const status=await call('memoryStatus');if(!current()||!status||typeof status.state!=='string')return;
@@ -242,7 +241,7 @@ function renderAtlas(){
  if(graphEntrancePending&&!graphEntranceFrame){
   // Let WebKit lay out the newly visible surface before reading its viewport.
   graphEntranceFrame=requestAnimationFrame(()=>{graphEntranceFrame=requestAnimationFrame(()=>{
-   graphEntranceFrame=0;if(view==='map'&&$('#lock-screen').hidden&&graphEntrancePending&&atlasController.revealGraph())graphEntrancePending=false;
+   graphEntranceFrame=0;if(view==='map'&&!interfaceSuspended&&graphEntrancePending&&atlasController.revealGraph())graphEntrancePending=false;
   });});
  }
 }
@@ -262,12 +261,12 @@ function setView(next,onReady){
  if(next==='map'){
   const page=$('#graph-page');page.inert=true;
   graphRenderFrame=requestAnimationFrame(()=>{graphRenderFrame=requestAnimationFrame(()=>{
-   graphRenderFrame=0;if(view!==next||!$('#lock-screen').hidden){page.inert=false;return;}
+   graphRenderFrame=0;if(view!==next||interfaceSuspended){page.inert=false;return;}
    let changed=false;
    try{if(graphSurfaceDirty){changed=renderTree();graphSurfaceDirty=false;}}
    catch(error){page.inert=false;toast(error.message,'error');return;}
    const paintGraph=()=>{
-    graphRenderFrame=0;if(view!==next||!$('#lock-screen').hidden){page.inert=false;return;}
+    graphRenderFrame=0;if(view!==next||interfaceSuspended){page.inert=false;return;}
     try{renderAtlas();onReady?.();}catch(error){toast(error.message,'error');}finally{page.inert=false;}
    };
    if(changed)graphRenderFrame=requestAnimationFrame(paintGraph);else paintGraph();
@@ -305,7 +304,7 @@ function retainPluginEditorDraft(){
 function clearPluginHeldDraft(path){if(pluginHeldDraft?.path===path&&pluginHeldDraft.vault===state.config.vault)pluginHeldDraft=null;}
 async function flushPluginHeldDraft(){
  const held=pluginHeldDraft;if(!held)return;
- if(!$('#lock-screen').hidden||held.vault!==state.config.vault)throw Error('O rascunho permanece reservado à pasta original. Desbloqueie essa pasta antes de fechar.');
+ if(interfaceSuspended||held.vault!==state.config.vault)throw Error('O rascunho permanece reservado à pasta original. Reabra o Oracle nessa pasta antes de fechar.');
  const saved=await queueEditorWrite(()=>call('saveDraft',{path:held.path,hash:held.hash,text:held.text}));
  if(saved?.saved!==true)throw Error('A gravação do rascunho ainda não foi confirmada.');
  if(pluginHeldDraft===held)pluginHeldDraft=null;
@@ -446,7 +445,7 @@ function departmentSettings(){
  $('#save-departments').onclick=safe(async()=>{
   // The native preferences keep their shipped slugs; the shared catalog normalizes them.
   const assignments={...state.config.departmentAssignments,...Object.fromEntries($$('[data-department-choice]').map(e=>[e.dataset.departmentChoice,e.value==='department/other'?'unassigned':e.value.replace(/^department\//,'')]))};
-  await call('saveDepartments',{assignments});state.config.departmentAssignments=assignments;if(atlasController)atlasController.topologyKey=null;await refresh();toast('Organização salva. Os arquivos permanecem no lugar.');
+  await call('saveDepartments',{assignments});state.config.departmentAssignments=assignments;if(atlasController)atlasController.topologyKey=null;await refresh();toast('Organização salva. Os arquivos permanecem no lugar.','success');
  });
 }
 
@@ -455,27 +454,17 @@ function settings(){
  if(modalDirty){requestEditorExit(false,settings);return}
  settingsTrail=true;
  const row=(id,name,description,ic='chevron')=>`<button class="setting-row" id="${id}"><span><strong>${name}</strong><small>${description}</small></span>${icon(ic)}</button>`;
- modal(`<h1>Configurações</h1><p class="settings-intro">Seu conhecimento, suas preferências e o aplicativo.</p>
+ modal(`<h1>Configurações</h1><p class="settings-intro">Seu segundo cérebro e sua conexão com o Codex.</p>
  <section class="settings-section"><h2>Seu espaço</h2><div class="setting-group">
  ${row('knowledge-settings','Knowledge Base','Prompts para organizar sua vida pessoal e profissional','book')}
  ${row('restart-setup','Configurar Oracle','Selecionar a pasta do seu segundo cérebro')}
  ${state.onboarding?.integrationActions?.length?row('optional-integration','Integração com o Codex','Conexão e descoberta das skills são opcionais'):''}
  </div></section>
- <section class="settings-section"><h2>Privacidade</h2><div class="setting-group">
- ${row('protect-settings','Bloqueio',state.config.protected?'Touch ID ou senha do Mac ativados':'Ativar Touch ID ou senha do Mac','lock')}
- ${row('revoke','Desconectar pastas','Interromper o acesso do Oracle aos documentos')}
- </div></section>
- <section class="settings-section"><h2>Aplicativo</h2><div class="setting-group">
- ${row('updates-settings','Atualizações','Verificar novidades e versões','refresh')}
- ${row('export-view','Exportar imagem','Salvar uma imagem do seu universo')}
- </div></section>`,{family:'settings',footer:false,root:true});
+`,{family:'settings',footer:false,root:true});
  $('#knowledge-settings').onclick=safe(()=>openKnowledgePrompts());
  $('#restart-setup').onclick=vaultSettings;
  $('#optional-integration')?.addEventListener('click',()=>showSetup({connection:true}));
- $('#updates-settings').onclick=safe(()=>showUpdates(false));
- $('#export-view').onclick=safe(async()=>{await closeModal();const path=await call('exportSnapshot');if(path)toast('Imagem salva.')});
- $('#protect-settings').onclick=safe(async()=>{await call('protect');await refresh();settings();toast('Bloqueio ativado')});
- $('#revoke').onclick=()=>{modal(`<h1>Desconectar pastas?</h1><p>O Oracle deixará de acessar seus documentos. Os arquivos continuam no Obsidian e você pode conectar a pasta novamente.</p>${actions('<button class="secondary" id="revoke-cancel">Voltar</button><button class="primary" id="confirm-revoke">Desconectar</button>')}`);$('#revoke-cancel').onclick=settings;$('#confirm-revoke').onclick=safe(async()=>{await call('revoke');live();selected=null;selectedSkill=null;query='';await refresh();settings();toast('Pastas desconectadas.','success')})};
+
 }
 function vaultSettings(){
  const vault=state.config.vault||'',name=vault.split('/').filter(Boolean).at(-1)||'Nenhuma pasta selecionada';
@@ -508,7 +497,7 @@ async function maintenanceSettings(){
  $('#maintenance-enabled').onchange=updateConsentControls;$('#maintenance-capture').onchange=updateConsentControls;updateConsentControls();
  $('#maintenance-save').onclick=safe(async()=>{const enabled=$('#maintenance-enabled').checked,capture=enabled&&$('#maintenance-capture').checked,remote=capture&&$('#maintenance-remote').checked;await call('configureMaintenance',{enabled,timezone:$('#maintenance-zone').value,hour:Number($('#maintenance-hour').value),autoCapture:capture,remoteProcessing:remote,consolidateWiki:remote,captureSource:capture?'codex_workspace_hooks_v1':null,synthesisScope:remote?'captured_messages_codex_v1':null});await refresh();await maintenanceSettings()});
  $('#maintenance-run').onclick=safe(async()=>{const result=await call('maintenanceRun');await maintenanceSettings();toast(result.status==='local_complete'?(result.complete?'Rotina local verificada.':'Parte local verificada; as demais fases continuam pendentes.'):'Manutenção não concluída: '+result.status)});
- $('#maintenance-request').onclick=safe(async()=>{const result=await call('maintenanceScheduleRequest');modal(`<h1>Pedido de agendamento</h1><p>Pedido preparado, ainda não registrado. O aplicativo oficial deverá localizar ou criar a tarefa e confirmar sua existência.</p><pre class="ob-readback">${esc(result.request)}</pre>${actions('<button class="primary" id="copy-maintenance-request">Copiar e abrir Codex</button>')}`);$('#copy-maintenance-request').onclick=safe(async()=>{await call('copy',{text:result.request});await call('onboardingOpenCodex');toast('Pedido copiado. Cole na conversa do espaço Oracle; confira depois o status do agendamento.')})});
+ $('#maintenance-request').onclick=safe(async()=>{const result=await call('maintenanceScheduleRequest');modal(`<h1>Pedido de agendamento</h1><p>Pedido preparado, ainda não registrado. O aplicativo oficial deverá localizar ou criar a tarefa e confirmar sua existência.</p><pre class="ob-readback">${esc(result.request)}</pre>${actions('<button class="primary" id="copy-maintenance-request">Copiar e abrir Codex</button>')}`);$('#copy-maintenance-request').onclick=safe(async()=>{await call('copy',{text:result.request},'instructions');await call('onboardingOpenCodex');})});
 }
 function renderPlayback(){
  const journal=replaySession?.kind==='journal',formation=atlasController?.getFormation(),playing=journal?!!timer:!!formation?.playing;
@@ -556,15 +545,15 @@ async function startJournal(){
  const data=await call('replayData');if(!data.events?.length)throw Error('Nenhum histórico de instalação disponível.');
  clearInterval(timer);timer=null;replaySession={...data,kind:'journal'};cursor=0;replay=true;closeModal();projectReplay();
 }
-$('#search').onclick=()=>openSearch();$('#refresh').onclick=safe(async()=>{await refreshVault();toast('Pasta relida.','success')});$('#settings').onclick=settings;
+$('#search').onclick=()=>openSearch();$('#refresh').onclick=safe(async()=>{await refreshVault();toast(state.scanError|| (state.scan?.pending?'Leitura da pasta em andamento.':'Pasta relida.'),state.scanError?'error':state.scan?.pending?'info':'success')});$('#settings').onclick=settings;
 $('#density').oninput=renderAtlas;$('#motion').checked=matchMedia('(prefers-reduced-motion: reduce)').matches;
 $('#motion').onchange=safe(()=>saveVisualPreference('reduceMotion',$('#motion').checked));
 $('#timeline').oninput=safe(scrub);$('#play').onclick=safe(play);$('#live').onclick=live;
 $('#speed').onclick=()=>{speed=speed===4?1:speed*2;$('#speed').textContent=speed+'×';atlasController?.setFormation({rate:speed});if(timer){clearInterval(timer);timer=null;play()}renderPlayback()};
 $('.wordmark').onclick=e=>{e.preventDefault();setView('map',()=>{renderAtlas();atlasController?.select(null);atlasController?.fit()})};
 $('#updates').onclick=()=>{showUpdates(false).catch(e=>toast(e.message,'error'))};
-function setZoom(factor){atlasController?.zoomAt(factor)}$('#zoom-in').onclick=()=>setZoom(1.2);$('#zoom-out').onclick=()=>setZoom(1/1.2);$('#zoom-reset').onclick=()=>atlasController?.fit();$('#context-back').onclick=()=>atlasController?.back();$('#reset-layout').onclick=()=>{atlasController?.reset();toast('Posições restauradas. Nenhum arquivo foi movido.')};$('#economy').onchange=safe(()=>saveVisualPreference('economy',$('#economy').checked));
-window.oracleLock=()=>{
+function setZoom(factor){atlasController?.zoomAt(factor)}$('#zoom-in').onclick=()=>setZoom(1.2);$('#zoom-out').onclick=()=>setZoom(1/1.2);$('#zoom-reset').onclick=()=>atlasController?.fit();$('#context-back').onclick=()=>atlasController?.back();$('#reset-layout').onclick=()=>{atlasController?.reset();toast('Posições restauradas. Nenhum arquivo foi movido.','success')};$('#economy').onchange=safe(()=>saveVisualPreference('economy',$('#economy').checked));
+function suspendInterface(){
  window.OracleUIRecovery?.clear();
  retainPluginEditorDraft();
  startupUpdateReady=false;resetUpdateTracking();
@@ -580,50 +569,48 @@ window.oracleLock=()=>{
  window.OracleOnboarding?.suspend();OracleInstallationVisual.reset();refreshSequence++;navigationEpoch++;noteReadSequence++;refreshTask=null;
  memoryEpoch++;memoryPollTask=null;lastMemorySignature='';visualPending={};
  clearTimeout(initialScanTimer);initialScanRetries=0;clearTimeout(updatePolling);
- window.OraclePluginBridge?.cancelPending('Oracle bloqueado');
- for(const p of pending.values()){clearTimeout(p.timeout);p.reject(Error('Oracle bloqueado'));}pending.clear();
+ window.OraclePluginBridge?.cancelPending('O transporte do Oracle foi encerrado');
+ for(const p of pending.values()){clearTimeout(p.timeout);p.reject(Error('O transporte do Oracle foi encerrado'));}pending.clear();
  replay=false;replayProjection=null;replaySession=null;closeModal(true);if(atlasController){atlasController.dispose();atlasController=null;}
- $('#lock-screen').hidden=false;$('#app').inert=true;state={entries:[],collections:[],events:[],config:{}};readDocument=null;editorSession=null;clearTimeout(draftTimer);
+ interfaceSuspended=true;$('#app').inert=true;state={entries:[],collections:[],events:[],config:{}};readDocument=null;editorSession=null;clearTimeout(draftTimer);
  $('#tree').oracleHTML=null;$('#tree').textContent='';$('#results').textContent='';$('#atlas').textContent='';$('#modal-content').textContent='';clearInterval(timer);timer=null;
 };
-$('#lock').onclick=safe(async()=>{await persistEditorDraft();await window.OracleOnboarding?.prepareToClose?.();if(!window.ORACLE_PREVIEW){await call('lock');if(window.OraclePluginBridge?.active())window.oracleLock();}else window.oracleLock();});
-$('#unlock').onclick=safe(async()=>{const allowed=await call('unlock');if(!allowed)return;$('#lock-screen').hidden=true;$('#app').inert=false;await refresh();try{await flushPluginHeldDraft();}catch(error){toast(error.message,'error');}void OracleTransitions.enterApp();if(view==='map'&&graphEntrancePending)requestGraphEntrance();await mountOnboarding();finishUpdateStartup();});
 // Deterministic ambient dust; it never represents an agent or event.
 for(let i=0;i<46;i++){const e=document.createElement('i');e.className='star';e.style.cssText=`left:${(Math.sin(i*12.9898)*43758.5453%1+1)%1*100}%;top:${(Math.sin(i*78.233)*12731.7%1+1)%1*100}%;width:${i%7===0?2:1}px;height:${i%7===0?2:1}px;opacity:${i%5/18+.04}`;$('#galaxy').append(e)}
 function markInterfaceReady(){window.oracleStartupRendered=true;void call('interfaceReady',{schema_version:1}).catch(()=>{});}
-call('boot').then(async b=>{applyAccessibility(b.accessibility);if(b.locked){window.oracleLock();void OracleTransitions.content($('.lock-card'));markInterfaceReady();}else{$('#app').inert=false;void OracleTransitions.enterApp();markInterfaceReady();await refresh();if(view==='map'&&graphEntrancePending)requestGraphEntrance();await mountOnboarding();finishUpdateStartup()}}).catch(e=>{if($('#lock-screen').hidden){$('#app').inert=false;void OracleTransitions.enterApp();window.OracleUIRecovery?.show(e,recoverInterface);}toast(e.message)});
+call('boot').then(async b=>{applyAccessibility(b.accessibility);if(b.locked)throw Error('O acesso ao Oracle foi interrompido. Reabra o aplicativo.');$('#app').inert=false;void OracleTransitions.enterApp();markInterfaceReady();await refresh();if(view==='map'&&graphEntrancePending)requestGraphEntrance();await mountOnboarding();finishUpdateStartup()}).catch(e=>{if(!interfaceSuspended){$('#app').inert=false;void OracleTransitions.enterApp();window.OracleUIRecovery?.show(e,recoverInterface);}toast(e.message,'error')});
 let eventsPollTask=null;
 setInterval(()=>{
- if(eventsPollTask||!$('#lock-screen').hidden||document.hidden||window.oracleWindowVisible===false)return;
+ if(eventsPollTask||interfaceSuspended||document.hidden||window.oracleWindowVisible===false)return;
  const epoch=memoryEpoch;
  eventsPollTask=call('events').then(events=>{
-  if(epoch!==memoryEpoch||!$('#lock-screen').hidden||document.hidden||window.oracleWindowVisible===false)return;
+  if(epoch!==memoryEpoch||interfaceSuspended||document.hidden||window.oracleWindowVisible===false)return;
   if(events.at(-1)?.event_id!==state.events.at(-1)?.event_id){state.events=events;renderProgress();renderAtlas();if(events.at(-1)?.phase&&!$('#modal').open)safe(refresh)()}
  }).catch(()=>{}).finally(()=>{eventsPollTask=null;});
 },2500);
-setInterval(()=>{if($('#lock-screen').hidden&&!document.hidden&&window.oracleWindowVisible!==false&&!$('#modal').open)safe(refresh)()},30000);
+setInterval(()=>{if(!interfaceSuspended&&!document.hidden&&window.oracleWindowVisible!==false&&!$('#modal').open)safe(refresh)()},30000);
 setInterval(()=>{void pollMemoryStatus();},1800);
 // App RPC replies already reach their callers. Host notifications must not
 // feed snapshot/refresh replies back into another snapshot request.
 let pluginToolResultRefresh=null;
 window.addEventListener('oracle-plugin-tool-result',event=>{
  if(event.detail?._meta?.['oracle/dispatch']||modalDirty||pluginToolResultRefresh)return;
- pluginToolResultRefresh=Promise.resolve().then(()=>window.oracleVaultSnapshotChanged?.()).catch(error=>toast(error.message)).finally(()=>{pluginToolResultRefresh=null;});
+ pluginToolResultRefresh=Promise.resolve().then(()=>window.oracleVaultSnapshotChanged?.()).catch(error=>toast(error.message,'error')).finally(()=>{pluginToolResultRefresh=null;});
 });
 window.addEventListener('oracle-plugin-tool-cancelled',event=>toast(event.detail.reason,'error'));
-window.addEventListener('oracle-plugin-teardown',()=>window.oracleLock());
+window.addEventListener('oracle-plugin-teardown',()=>suspendInterface());
 window.addEventListener('oracle-plugin-teardown-error',event=>toast(event.detail.reason,'error'));
 let pluginAccessibilityPoll=null;
 setInterval(()=>{
- if(pluginAccessibilityPoll||!window.OraclePluginBridge?.active()||!window.OraclePluginBridge.initialized||document.hidden||window.oracleWindowVisible===false||!$('#lock-screen').hidden)return;
+ if(pluginAccessibilityPoll||!window.OraclePluginBridge?.active()||!window.OraclePluginBridge.initialized||document.hidden||window.oracleWindowVisible===false||interfaceSuspended)return;
  const epoch=memoryEpoch;
- pluginAccessibilityPoll=call('boot').then(boot=>{if(epoch!==memoryEpoch||document.hidden||!$('#lock-screen').hidden)return;if(boot.locked)window.oracleLock();else applyAccessibility(boot.accessibility);}).catch(()=>{}).finally(()=>{pluginAccessibilityPoll=null;});
+ pluginAccessibilityPoll=call('boot').then(boot=>{if(epoch!==memoryEpoch||document.hidden||interfaceSuspended)return;if(boot.locked)suspendInterface();else applyAccessibility(boot.accessibility);}).catch(()=>{}).finally(()=>{pluginAccessibilityPoll=null;});
 },5000);
 // Native filesystem scans publish immediately; polling remains a fallback for
 // missed events and hidden windows. Never wait for the derived engine index.
 window.oracleVaultSnapshotChanged=async()=>{
- if(!$('#lock-screen').hidden||document.hidden)return;
- try{if(refreshTask)await refreshTask;await refresh();}catch(error){toast(error.message);}
+ if(interfaceSuspended||document.hidden)return;
+ try{if(refreshTask)await refreshTask;await refresh();}catch(error){toast(error.message,'error');}
 };
 
 async function memory(){
@@ -636,7 +623,7 @@ async function memory(){
  if(status.sources.some(s=>s.id==='oracle-vault'))$('#memory-source').value='oracle-vault';
  const freshness=document.createElement('div');freshness.id='memory-freshness';freshness.className='memory-freshness';freshness.setAttribute('role','status');$('.modal-body').prepend(freshness);renderMemoryFreshness();
  const update=document.createElement('button');update.className='secondary';update.textContent='Atualizar índice local';$('.modal-footer').prepend(update);
- update.onclick=safe(async()=>{state.memorySync=await call('memoryRefresh');renderMemoryFreshness();});
+ update.onclick=safe(async()=>{state.memorySync=await call('memoryRefresh');renderMemoryFreshness();toast(state.memorySync.state==='current'?'Índice atualizado.':'Consulta do índice concluída. Há atualização pendente.',state.memorySync.state==='current'?'success':'info');});
  const source=()=>$('#memory-source').value;
  const viewRevision=modalRevision;let searchSequence=0;
  const renderHits=(hits,src)=>{
@@ -654,7 +641,7 @@ async function memory(){
    if(!current())return;
    if(hits.some(h=>h.source_id&&h.source_id!==src))throw Error('A origem dos resultados não corresponde à fonte selecionada.');
    renderHits(hits,src);
-  }catch(e){if(current()){$('#memory-results').innerHTML='<p class="empty">Consulta não concluída.</p>';toast(e.message)}}
+  }catch(e){if(current()){$('#memory-results').innerHTML='<p class="empty">Consulta não concluída.</p>';toast(e.message,'error')}}
   finally{if(current())$('#memory-results').setAttribute('aria-busy','false')}
  };
  $('#memory-search').onclick=search;$('#memory-query').onkeydown=e=>{if(e.key==='Enter')search()};$('#memory-source').onchange=search;if(status.sources.length)await search();
@@ -699,7 +686,7 @@ function bindMarkdown(container,sourcePath=readDocument?.relative||''){
  }));
  container.querySelectorAll('[data-wiki]').forEach(e=>e.onclick=safe(async()=>{
   let target;try{target=OracleMarkdown.resolveWiki(e.dataset.wiki,sourcePath,visibleEntries());}
-  catch(error){openSearch(e.dataset.wiki.split('#')[0]);toast(error.message);return;}
+  catch(error){openSearch(e.dataset.wiki.split('#')[0]);toast(error.message,'error');return;}
   if(await openNote(target.path))scrollMarkdownFragment(target.fragment);
  }));
 }
@@ -841,7 +828,7 @@ function scheduleAutomaticUpdateCheck(){
  },60000);
 }
 function maybeAutomaticUpdateCheck(status,{allowUpdateDialog=false}={}){
- if(!status||window.ORACLE_PREVIEW||state.config?.fixture||document.hidden||window.oracleWindowVisible===false||!$('#lock-screen').hidden||updateBusy||status.busy)return;
+ if(!status||window.ORACLE_PREVIEW||state.config?.fixture||document.hidden||window.oracleWindowVisible===false||interfaceSuspended||updateBusy||status.busy)return;
  if($('#modal').open&&!(allowUpdateDialog&&$('#modal').dataset.family==='updates'))return;
  const onboarding={...state.onboarding,...window.OracleOnboarding?.getState?.()};
  // Discovery does not depend on Codex hooks being trusted or on resuming a
@@ -939,13 +926,13 @@ function resetUpdateTracking(){
  updateRequestID=null;updateOperation=null;updateStarting=false;updateBusy=false;updateAutomatic=false;latestUpdateStatus=null;
 }
 function refreshVisibleUpdateStatus(){
- if(document.hidden||window.oracleWindowVisible===false||!$('#lock-screen').hidden)return;
+ if(document.hidden||window.oracleWindowVisible===false||interfaceSuspended)return;
  if(updateBusy||($('#modal').open&&['updates','update-installing'].includes($('#modal').dataset.family)))void pollUpdateStatus({fresh:true});
  else if(startupUpdateReady&&latestUpdateStatus)maybeAutomaticUpdateCheck(latestUpdateStatus);
 }
 async function pollUpdateStatus({fresh=false}={}){
  if(state.features?.updates===false)return null;
- if(!$('#lock-screen').hidden)return null;
+ if(interfaceSuspended)return null;
  // Polling follows an operation, not a modal/navigation epoch. Reopening asks for
  // one fresh read after a pending read; a new click need not wait for an old one.
  if(updatePollPending&&updatePollGeneration===updateGeneration){if(fresh)updatePollAgain=true;return updatePollPending;}
@@ -954,20 +941,20 @@ async function pollUpdateStatus({fresh=false}={}){
  const task=(async()=>{
   try{
    let status=await call('updateStatus',requestID?{requestID}:{});
-   if(generation!==updateGeneration||!$('#lock-screen').hidden)return null;
+   if(generation!==updateGeneration||interfaceSuspended)return null;
    if(status?.requestNotFound&&requestID)status={...status,requestID,busy:false,phase:'interrupted',message:'O pedido não foi encontrado. Verifique novamente antes de instalar.',results:[]};
    renderUpdateStatus(status);
    if(updateAutomatic&&!updateBusy){automaticUpdateFailures=(status.phase==='failed'||status.results?.some(r=>['error','offline'].includes(r.status)))?automaticUpdateFailures+1:0;updateAutomatic=false;}
    return status;
   }catch(e){
-   if(generation!==updateGeneration||!$('#lock-screen').hidden)return null;
+   if(generation!==updateGeneration||interfaceSuspended)return null;
    retryDelay=1800;
    const message=$('#update-message');if(message&&$('#modal').open)message.textContent='Não foi possível consultar o progresso. Tentando novamente…';
    if(!updateBusy&&$('#modal').open)toast(e.message,'error');
    return null;
   }finally{
    if(updatePollPending===task){updatePollPending=null;updatePollGeneration=-1;}
-   if(generation===updateGeneration&&$('#lock-screen').hidden){
+   if(generation===updateGeneration&&!interfaceSuspended){
     const again=updatePollAgain;updatePollAgain=false;
     if(updateBusy||again){clearTimeout(updatePolling);updatePolling=setTimeout(()=>{void pollUpdateStatus()},again?0:retryDelay);}
    }
@@ -983,13 +970,13 @@ async function startUpdateRequest(operation,automatic=false){
  renderUpdateStatus({...latestUpdateStatus,requestID,operation,revision:-1,busy:true,phase:operation==='check-only'?'checking':'preparing',message:operation==='check-only'?'Verificando atualizações…':'Preparando a atualização…',error:null,results:[],canCancelWait:false,completed:0,total:0,bytes_downloaded:0,bytes_total:0},{authoritative:true});
  try{
   const response=await call('updateStart',{operation,requestID,automatic});
-  if(generation!==updateGeneration||!$('#lock-screen').hidden)return null;
+  if(generation!==updateGeneration||interfaceSuspended)return null;
   updateStarting=false;
   if(!response||typeof response.requestID!=='string'||!response.status||response.status.requestID!==response.requestID)throw Error('Não foi possível confirmar o início. Conferindo o pedido antes de tentar novamente.');
   updateRequestID=response.requestID;updateOperation=response.operation||response.status.operation;
   renderUpdateStatus(response.status,{authoritative:true});
  }catch(e){
-  if(generation!==updateGeneration||!$('#lock-screen').hidden)return null;
+  if(generation!==updateGeneration||interfaceSuspended)return null;
   updateStarting=false;
   // A lost acknowledgement is not permission to resend an installation. Read
   // this exact request first; the native side deduplicates by request ID too.
@@ -1002,8 +989,9 @@ async function cancelUpdateWait(){
  const generation=updateGeneration,requestID=updateRequestID,button=$('#update-cancel-wait');if(button)button.disabled=true;
  try{
   const response=await call('updateCancel',{requestID});
-  if(generation!==updateGeneration||requestID!==updateRequestID||!$('#lock-screen').hidden)return;
+  if(generation!==updateGeneration||requestID!==updateRequestID||interfaceSuspended)return;
   if(response?.status)renderUpdateStatus(response.status);else if(response?.requestID)renderUpdateStatus(response);
+  toast('Pedido de pausa recebido. Confira o estado da atualização.');
  }catch(e){if(generation===updateGeneration)toast(e.message,'error');}
  finally{if(generation===updateGeneration){if(button?.isConnected)button.disabled=false;void pollUpdateStatus({fresh:true});}}
 }
@@ -1083,10 +1071,9 @@ for(const [key,query] of [['reduceMotion','(prefers-reduced-motion: reduce)'],['
 if(innerWidth<=1050)toggleNavigation(false);
 document.addEventListener('keydown',e=>{if(e.key==='Escape'&&!$('#modal').open){if(document.body.classList.contains('observatory-open'))toggleObservatory(false)}});
 
-window.oracleTakeDraftAndLock=()=>{const editor=editorSession&&modalDirty?{path:editorSession.path,hash:editorSession.hash,text:editorSession.text,vault:state.config.vault}:null;const onboarding=window.OracleOnboarding?.pendingDraft?.()||null;window.oracleLock();return {editor,onboarding};};
 
 window.addEventListener('oracle:onboarding-progress',event=>{
- if(!$('#lock-screen').hidden)return;
+ if(interfaceSuspended)return;
  state.onboarding={...state.onboarding,...event.detail};
  if(!replay)renderAtlas();
  void maybeShowKnowledgeWelcome();
@@ -1109,7 +1096,7 @@ async function backupSettings(){
  const value=await call('backupStatus'),last=value.lastRun||{},id=last.id||last.backup_id;
  const verified=last.complete===true&&last.integrity_verified===true;
  modal(`<h1>Backup privado do banco</h1><p>Cópia local do banco do Second Brain, sem envio remoto. Não inclui Markdown, anexos ou todo o aplicativo. No mesmo disco, não protege contra perda física. Os arquivos são privados, mas não têm criptografia própria.</p><label class="ob-check"><input type="checkbox" id="backup-enabled" ${value.enabled?'checked':''} ${!value.available?'disabled':''}>Autorizar backup privado para este vault</label><p>Consentimento separado da manutenção, captura e processamento remoto. Quando autorizado, a manutenção cria o backup depois da sincronização. Você também pode criar uma cópia manual.</p>${!value.available?'<p role="alert">Configure o perfil local Oracle e autorize seu acesso antes de habilitar backups. Instalações externas são preservadas.</p>':''}<dl class="ob-review"><dt>Última operação verificada</dt><dd>${verified?(last.restore_verified?'Restauração de teste verificada, sem ativação':'Integridade verificada; restauração ainda não testada'):'Nenhuma operação confirmada'}</dd><dt>Identificador</dt><dd>${esc(id||'Nenhum')}</dd></dl><p>A verificação de integridade não prova uma restauração. Restaurar para teste exige confirmação e cria um estado novo, sem substituir ou ativar o banco atual.</p>${actions('<button class="secondary" id="backup-save">Salvar consentimento</button><button class="primary" id="backup-create" '+(!value.enabled?'disabled':'')+'>Criar backup</button><button class="secondary" id="backup-verify" '+(!value.available||!id?'disabled':'')+'>Verificar integridade</button><button class="secondary" id="backup-restore" '+(!value.available||!id?'disabled':'')+'>Testar restauração…</button>')}`,{key:'backup-settings'});
- $('#backup-save').onclick=safe(async()=>{await call('configureBackup',{enabled:$('#backup-enabled').checked});await backupSettings()});
+ $('#backup-save').onclick=safe(async()=>{await call('configureBackup',{enabled:$('#backup-enabled').checked});await backupSettings();toast('Preferência de backup salva.','success')});
  $('#backup-create').onclick=safe(async()=>{await call('backupCreate');await backupSettings();toast('Backup criado e integridade verificada. A restauração ainda não foi testada.')});
  $('#backup-verify').onclick=safe(async()=>{await call('backupVerify',{id});await backupSettings();toast('Integridade verificada. Isso não confirma uma restauração.')});
  $('#backup-restore').onclick=()=>{
@@ -1132,7 +1119,8 @@ function bindKnowledgeCopy(ctx){
    const fresh=OracleKnowledgePrompts.context(latest.config.vault,latest.entries);
    const area=fresh.areas.find(a=>a.id===id);
    const interview=await call('onboardingPrepareKnowledgeInterview',{vault:fresh.vault,topic:id,area:area.path,prepareWriteScope:true});
-   await call('onboardingOpenKnowledgeCodex',{vault:fresh.vault,runID:interview.run_id,prompt:OracleKnowledgePrompts.build(id,{...fresh,vault:interview.vault,interview})});
+   const opened=await call('onboardingOpenKnowledgeCodex',{vault:fresh.vault,runID:interview.run_id,prompt:OracleKnowledgePrompts.build(id,{...fresh,vault:interview.vault,interview})});
+   if(opened!==true&&opened?.opened!==true)throw Error('A abertura no Codex não foi confirmada.');
    if($('#knowledge-copy-status'))$('#knowledge-copy-status').textContent='Roteiro aberto no Codex. Pressione Enviar para começar e confira o acesso ao vault. Depois da entrevista, volte aqui para conferir as notas.';
   }finally{if(button.isConnected)button.disabled=false}
  }));
@@ -1144,7 +1132,8 @@ function bindKnowledgeCopy(ctx){
    const fresh=OracleKnowledgePrompts.context(latest.config.vault,latest.entries);
    const area=fresh.areas.find(a=>a.id===id);
    const interview=await call('onboardingPrepareKnowledgeInterview',{vault:fresh.vault,topic:id,area:area.path,prepareWriteScope:false});
-   await call('copy',{text:OracleKnowledgePrompts.build(id,{...fresh,vault:interview.vault,interview})});
+   const copied=await call('copy',{text:OracleKnowledgePrompts.build(id,{...fresh,vault:interview.vault,interview})},'prompt');
+   if(copied!==true&&copied?.copied!==true)throw Error('A cópia do prompt não foi confirmada.');
    if($('#knowledge-copy-status'))$('#knowledge-copy-status').textContent=`Prompt de ${OracleKnowledgePrompts.topics[id].name.toLocaleLowerCase('pt-BR')} copiado. Cole no Codex para começar.`;
   }finally{button.disabled=false}
  }));
@@ -1156,7 +1145,8 @@ function bindKnowledgeCopy(ctx){
    if(latest.config.vault!==ctx.vault)throw Error('A pasta selecionada mudou. Reabra Knowledge Base para conferir a entrevista correta.');
    const result=await call('knowledgeInterviewStatus',{topic:id});
    if(status?.isConnected)status.textContent=result.message+(result.pending_count?` ${result.pending_count} pendências foram declaradas.`:'');
-  }catch(error){if(status?.isConnected)status.textContent='Conferência pendente: '+error.message;}
+   toast(result.message||'Conferência concluída.',result.status==='files_verified'?'success':'info');
+  }catch(error){if(status?.isConnected)status.textContent='Conferência pendente: '+error.message;toast(error.message,'error');}
   finally{if(button.isConnected)button.disabled=false}
  });
 }
@@ -1169,28 +1159,23 @@ function openKnowledgePrompts({welcome=false,topic=null}={}){
  if(navigationBlocked())return false;
  if(state.onboarding?.knowledgeInterviewAvailable===false){
   if(welcome)return false;
-  modal('<h1>Knowledge Base</h1><p>Suas notas pessoais e profissionais estão disponíveis no vault.</p><p>A abertura e a conferência de entrevistas pelo Oracle ainda não estão disponíveis nesta versão do plugin.</p>'+actions('<button class="primary" id="knowledge-view-notes">Ver minhas notas</button>'),{family:'knowledge-prompts',key:'knowledge-prompts'});
-  $('#knowledge-view-notes').onclick=safe(openKnowledgeHub);return true;
+  modal('<h1>Knowledge Base</h1><p>Suas notas pessoais e profissionais estão disponíveis no vault.</p><p>A abertura e a conferência de entrevistas pelo Oracle ainda não estão disponíveis nesta versão do plugin.</p>',{family:'knowledge-prompts',key:'knowledge-prompts'});return true;
  }
- let ctx;try{ctx=knowledgeContext()}catch(error){toast(error.message);return false}
+ let ctx;try{ctx=knowledgeContext()}catch(error){toast(error.message,'error');return false}
  const topics=OracleKnowledgePrompts.topics;
  const descriptions={personal:'Valores, rotina, relações e planos.',professional:'Carreira, projetos, responsabilidades e negócio.'};
  const subjects={personal:['Quem você é e o que importa','Sua rotina e suas relações','Prioridades para os próximos meses'],professional:['Sua atuação e o valor que entrega','Projetos e responsabilidades atuais','Direção para sua carreira ou negócio']};
  if(modal(`<h1>Knowledge Base</h1><div class="knowledge-start"><h2>${welcome?'Seu segundo cérebro está pronto.':'Dê contexto ao seu segundo cérebro.'}</h2><p>Escolha uma área para organizar com o Codex.</p></div>
- <div class="knowledge-prompt-list">${Object.entries(topics).map(([id,t])=>`<section class="knowledge-prompt-option"><div class="knowledge-prompt-title">${icon(id==='personal'?'person':'code')}<h2>${t.name}</h2></div><p>${descriptions[id]}</p><ul>${subjects[id].map(text=>`<li>${text}</li>`).join('')}</ul><div class="knowledge-prompt-actions"><button class="quiet-link" data-preview-knowledge="${id}">Ver prompt</button><button class="quiet-link" data-copy-knowledge="${id}">Copiar prompt</button><button class="primary" data-open-knowledge="${id}">Abrir Codex</button></div><button class="quiet-link" data-check-knowledge="${id}">Conferir entrevista</button><p class="knowledge-footer-note" data-knowledge-receipt="${id}" role="status" aria-live="polite">Após concluir no Codex, confira se os fatos do comprovante estão nas notas do vault.</p></section>`).join('')}</div>
- <ol class="knowledge-steps" aria-label="Como começar"><li><span>1</span>Escolha uma área</li><li><span>2</span>Abra no Codex</li><li><span>3</span>Responda no seu ritmo</li></ol>
- <div class="knowledge-destination">${icon('folder')}<div><span>Obsidian selecionado</span><strong>${esc(ctx.name)}</strong></div><details><summary>Ver caminho</summary><small>${esc(ctx.vault)}</small></details></div>
- <p id="knowledge-copy-status" role="status" aria-live="polite"></p>
- ${actions('<p class="knowledge-footer-note">Você pode voltar aqui pelos Ajustes.</p><button class="quiet-link" id="knowledge-view-notes">Ver minhas notas</button>')}`,{family:'knowledge-prompts',key:'knowledge-prompts'})===false)return false;
+ <div class="knowledge-prompt-list">${Object.entries(topics).map(([id,t])=>`<section class="knowledge-prompt-option"><div class="knowledge-prompt-title">${icon(id==='personal'?'person':'code')}<h2>${t.name}</h2></div><p>${descriptions[id]}</p><ul>${subjects[id].map(text=>`<li>${text}</li>`).join('')}</ul><div class="knowledge-prompt-actions"><button class="primary" data-open-knowledge="${id}">Abrir Codex</button><button class="quiet-link" data-preview-knowledge="${id}">Ver prompt</button><button class="quiet-link" data-copy-knowledge="${id}">Copiar prompt</button><button class="quiet-link" data-check-knowledge="${id}">Conferir entrevista</button></div><p class="knowledge-receipt" data-knowledge-receipt="${id}" role="status" aria-live="polite"></p></section>`).join('')}</div>
+ <p id="knowledge-copy-status" role="status" aria-live="polite"></p>`,{family:'knowledge-prompts',key:'knowledge-prompts'})===false)return false;
  bindKnowledgeCopy(ctx);
  $$('[data-preview-knowledge]').forEach(button=>button.onclick=()=>openKnowledgePromptPreview(button.dataset.previewKnowledge,ctx));
- $('#knowledge-view-notes').onclick=safe(openKnowledgeHub);
  if(topic)requestAnimationFrame(()=>$(`[data-open-knowledge="${topic}"]`)?.focus({preventScroll:true}));
  return true;
 }
 async function maybeShowKnowledgeWelcome(){
  const ob=state.onboarding,vault=state.config.vault;
- if(knowledgeWelcomeBusy||!OracleKnowledgePrompts.welcomeEligible(ob,vault)||!$('#lock-screen').hidden||document.hidden||window.oracleWindowVisible===false||document.querySelector('dialog[open]')||updateBusy||modalDirty)return;
+ if(knowledgeWelcomeBusy||!OracleKnowledgePrompts.welcomeEligible(ob,vault)||interfaceSuspended||document.hidden||window.oracleWindowVisible===false||document.querySelector('dialog[open]')||updateBusy||modalDirty)return;
  const key=JSON.stringify([ob.runID,vault]);if(knowledgeWelcomeShown.has(key))return;
  knowledgeWelcomeBusy=true;
  try{

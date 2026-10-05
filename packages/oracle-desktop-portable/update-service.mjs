@@ -1,6 +1,7 @@
 import {createSkillsReleaseSource} from './skills-release-source.mjs';
 import {createSkillsUpdateTransaction} from './skills-update-transaction.mjs';
 import {createPluginUpdateChannel} from './plugin-update-channel.mjs';
+import {assertCompleteCodexUserSkillsRegistration} from './codex-user-skills-registration.mjs';
 const fail=(code,message)=>{throw Object.assign(new Error(message),{code});};
 const requestID=value=>typeof value==='string'&&/^[A-Za-z0-9][A-Za-z0-9_-]{7,79}$/.test(value);
 /** One detached, deduplicated update at a time. A lost UI acknowledgement does
@@ -32,8 +33,13 @@ export function createPortableUpdateService(options){
    if(params.operation==='oracle'){record.status.receipt=await plugin.apply(scope);check();record.status.phase=record.status.receipt.installed?'restart-required':record.status.receipt.registrationRequired?'registration-required':'complete';return;}
    if(!selected.selected)fail('vault_required','Escolha a pasta do Obsidian antes de atualizar o acervo.');if(!latestSkills)fail('skills_check_required','Consulte a atualização de skills primeiro.');
    const previous=await source.installed();check();record.status.phase='downloading';const stage=await source.download(latestSkills,scope);check();beforeSkillsInstall();check();
-   const receipt=await transaction.install(stage,{...scope,previous,onProgress:progress=>{check();record.status={...record.status,...progress};}});check();record.status.receipt={created:receipt.created,replaced:receipt.replaced,unchanged:receipt.unchanged,conflicts:receipt.conflicts.length,obsoletePreserved:receipt.obsoletePreserved.length,recoveryPath:receipt.recoveryPath,complete:receipt.complete,indexComplete:receipt.indexComplete};
-   record.status.receipt.integration=await afterSkillsInstall({...scope,admitted:stage.admitted,receipt,check});check();
+   const summarize=receipt=>({created:receipt.created,replaced:receipt.replaced,unchanged:receipt.unchanged,conflicts:receipt.conflicts.length,obsoletePreserved:receipt.obsoletePreserved.length,recoveryPath:receipt.recoveryPath,complete:receipt.complete,indexComplete:receipt.indexComplete});
+   let integration;
+   const receipt=await transaction.install(stage,{...scope,previous,onProgress:progress=>{check();record.status={...record.status,...progress};},afterIndexVerified:async receipt=>{
+    check();record.status.receipt=summarize(receipt);
+    integration=await afterSkillsInstall({...scope,admitted:stage.admitted,receipt,check});check();record.status.receipt.integration=integration;
+    if(stage.admitted.items.length)assertCompleteCodexUserSkillsRegistration(stage.admitted,integration?.registration);
+   }});check();record.status.receipt={...summarize(receipt),integration};
    record.status.skills={currentReleaseID:latestSkills.releaseID,latestReleaseID:latestSkills.releaseID,available:false,signatureVerified:true};record.status.phase='complete';
   }).catch(error=>{record.status.phase=controller.signal.aborted?'paused':'failed';record.status.error={code:String(error.code||'update_failed'),message:String(error.message||'Não foi possível atualizar.')};}).finally(()=>{record.status.running=false;});
   return knownStatus(params.requestID);

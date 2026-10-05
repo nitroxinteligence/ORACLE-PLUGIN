@@ -100,6 +100,7 @@
       frame('Escolha seu Obsidian.',`<p>Selecione o vault que você já criou no Obsidian. As notas e os arquivos serão instalados nessa pasta.</p><div class="ob-selection"><span>${esc(current.vaultName||'Nenhuma pasta selecionada')}</span>${button('ob-vault','Escolher pasta…',false)}</div>`,button('ob-vault-back','Voltar',false)+button('ob-vault-next','Prosseguir'));
       $('#ob-vault').onclick=action(async()=>{const result=await invoke('onboardingChooseVault');if(result){await api.refresh?.();await refreshStatus();render();}});
       $('#ob-vault-back').onclick=action(()=>navigate('activation'));
+      $('#ob-vault-next').hidden=!current.hasVault;
       $('#ob-vault-next').disabled=!current.hasVault;
       $('#ob-vault-next').onclick=action(async()=>{if(!current.hasVault)throw Error('Escolha uma pasta para continuar.');await navigate('install');});
     }else if(stage==='install'){

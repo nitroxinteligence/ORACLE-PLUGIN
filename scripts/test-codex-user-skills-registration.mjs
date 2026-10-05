@@ -5,7 +5,7 @@ import {existsSync} from 'node:fs';
 import {join} from 'node:path';
 import {updateFixture,syntheticRelease} from './portable-updates-fixture.mjs';
 import {admitSkillsRelease} from '../packages/oracle-desktop-portable/skills-release-admission.mjs';
-import {createCodexUserSkillsRegistration} from '../packages/oracle-desktop-portable/codex-user-skills-registration.mjs';
+import {createCodexUserSkillsRegistration,assertCompleteCodexUserSkillsRegistration} from '../packages/oracle-desktop-portable/codex-user-skills-registration.mjs';
 
 const names=['oracle-skill-'+ 'a'.repeat(20),'oracle-skill-'+ 'b'.repeat(20)];
 const entries=['SISTEMA/skills/first/SKILL.md','SISTEMA/skills/second/SKILL.md'];
@@ -21,6 +21,7 @@ async function fixture(t){
 test('signed complete directories register in USER scope and retries preserve originals and other skills',async t=>{
  const f=await fixture(t);await fs.mkdir(join(f.destination,'unrelated'),{recursive:true});await fs.writeFile(join(f.destination,'unrelated/SKILL.md'),'USER');
  const first=await f.register({admitted:f.admitted,ticket:f.ticket});assert.equal(first.registered,2);assert.equal(first.created,2);assert.equal(first.registrationVerified,true);assert.equal(first.discoveryVerified,false);assert.equal(first.modelExecutionVerified,false);
+ assert.equal(assertCompleteCodexUserSkillsRegistration(f.admitted,first),first);
  for(let i=0;i<2;i++){assert.equal(await fs.realpath(join(f.destination,names[i],'SKILL.md')),join(f.vaultRoot,entries[i]));assert.equal(await fs.readFile(join(f.vaultRoot,entries[i]),'utf8'),files[entries[i]]);}
  assert.equal(await fs.readFile(join(f.destination,names[0],'references/context.md'),'utf8'),files[reference]);
  assert.equal((await f.register({admitted:f.admitted,ticket:f.ticket})).created,0);
@@ -52,4 +53,5 @@ test('cancellation after a created link rolls back only this invocation and pres
  assert.deepEqual(await fs.readdir(f.destination),[]);
  await fs.writeFile(join(f.vaultRoot,reference),'USER EDIT');
  const report=await f.register({admitted:f.admitted,ticket:f.ticket,preservedPaths:[reference]});assert.equal(report.registered,1);assert.equal(report.skippedPreserved,1);assert.equal(report.complete,false);assert.equal(existsSync(join(f.destination,names[0])),false);assert.equal(await fs.readFile(join(f.vaultRoot,reference),'utf8'),'USER EDIT');
+ assert.throws(()=>assertCompleteCodexUserSkillsRegistration(f.admitted,report),{code:'codex_skills_registration_partial'});
 });

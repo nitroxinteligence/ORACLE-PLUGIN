@@ -1,4 +1,5 @@
-{
+// Reviewed immutable public metadata transitions. No user state.
+export default {
   "files": {
     "SISTEMA/skills/codigo/frontend/impeccable/agents/openai.yaml": {
       "afterSHA256": "44247b7e0a9d77cebb13284c098d5b3a5cd2a64c79510b68b6f491d3877e0a85",
@@ -157,4 +158,4 @@
   "sourceRepository": "https://github.com/nitroxinteligence/ORACLE-SKILLS",
   "sourceRevision": "53cf09ff9be9786c9a422e8e75772ea185017360",
   "targetRevision": "5509070042ba9667b5f4eea3faa5df130cdaedc7"
-}
+};

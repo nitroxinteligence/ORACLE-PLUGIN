@@ -1,7 +1,7 @@
 import {constants,lstatSync,openSync,closeSync,writeFileSync,fsyncSync,renameSync,unlinkSync} from 'node:fs';
 import {join,dirname} from 'node:path';
 import {createHash,randomUUID} from 'node:crypto';
-import baseline from './readable-skill-metadata-baseline.json' with {type:'json'};
+import baseline from './readable-skill-metadata-baseline.mjs';
 
 const sha=bytes=>createHash('sha256').update(bytes).digest('hex');
 const fail=code=>{throw Object.assign(new Error(code),{code});};

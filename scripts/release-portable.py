@@ -57,7 +57,7 @@ def main(a):
     methods=job/'method';run(['python3',ROOT/'scripts/build-official-skills.py','--source',intake/'gbrain','--output',methods,'--pin',gbrain['commit'],'--version',gbrain['version'],'--maximum-bytes','140000000'])
     vendors=job/'vendors';run(['python3',ROOT/'scripts/prepare-portable-vendors.py','--intake',intake,'--output',vendors,'--method',methods])
     test_env={**os.environ,'ORACLE_TEST_AI_MEMORY_BINARY':str(vendors/'ai-memory-mac')}
-    run(['node','--test','scripts/test-portable-content-admission.mjs','scripts/test-portable-skills-updates.mjs','scripts/test-portable-profile-upgrade.mjs','scripts/test-portable-official-hooks.mjs','scripts/test-plugin-bridge.mjs','scripts/test-publisher-fetch.mjs','scripts/test-portable-plugin-updates.mjs'],env=test_env)
+    run(['node','--test','scripts/test-portable-content-admission.mjs','scripts/test-portable-skills-updates.mjs','scripts/test-portable-profile-upgrade.mjs','scripts/test-portable-official-hooks.mjs','scripts/test-plugin-bridge.mjs','scripts/test-publisher-fetch.mjs','scripts/test-portable-plugin-updates.mjs','scripts/test-readable-skill-metadata-upgrade.mjs'],env=test_env)
     catalog=job/'catalog';run(['node',ROOT/'scripts/download-reviewed-skills.mjs',catalog],env=api_env)
     pin_temp=pathlib.Path(os.environ.get('RUNNER_TEMP',tempfile.gettempdir()))
     if pin_temp.resolve()!=pin_temp or pin_temp.is_relative_to(ROOT):raise ValueError('External private CI signing directory required')
@@ -77,6 +77,7 @@ def main(a):
     windows=job/'windows';directory,engine=content['windows'];run(['python3',ROOT/'scripts/package-portable-plugin-windows.py','--base-package',mac/'oracle-system-mac-stable','--bun-runtime',binaries/'bun-windows.exe','--ai-memory-runtime',vendors/'ai-memory-windows.exe','--ai-memory-license',vendors/'AI-MEMORY-WINDOWS-LICENSE','--verifier-runtime',bun,'--content-envelope',directory/'envelope.json','--content-payload',directory/'payload','--output',windows,'--version',next_version])
     mac_zip=job/('Oracle-System-'+next_version+'-Mac.zip');win_zip=job/('Oracle-System-'+next_version+'-Windows.zip');shutil.copy2(mac/'oracle-system-mac-stable.zip',mac_zip);shutil.copy2(windows/('oracle-system-windows-stable-windows-x64-'+next_version+'.zip'),win_zip)
     boot=job/'current-boot';run(['python3',ROOT/'scripts/qualify-portable-package.py','--archive',mac_zip,'--output',boot]);current=read(boot/'report.json')
+    run([bun,ROOT/'scripts/qualify-portable-onboarding.mjs','--payload-root',current['payloadRoot']])
     migration=json.loads(run([bun,ROOT/'scripts/qualify-portable-upstream.mjs','--previous-root',prior_runtime['payloadRoot'],'--previous-bun',prior_runtime['runtime'],'--current-root',current['payloadRoot'],'--current-bun',current['runtime']]))
     stage=job/'marketplace';run(['python3',ROOT/'scripts/prepare-plugin-release.py','--mac',mac_zip,'--windows',win_zip,'--version',next_version,'--output',stage])
     release=job/'oracle-plugin-release.json';revision=run(['git','rev-parse','HEAD']).strip()

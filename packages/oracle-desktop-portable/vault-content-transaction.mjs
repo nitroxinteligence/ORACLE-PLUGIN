@@ -3,6 +3,7 @@ import { join, resolve, dirname } from 'node:path';
 import { createHash } from 'node:crypto';
 import { admittedManifestForPlan } from './content-installation-plan.mjs';
 import { loadAdmittedContentFile, verifyContentFile } from './content-admission.mjs';
+import {upgradeReadableSkillMetadata} from './readable-skill-metadata-upgrade.mjs';
 const fail = code => { throw Object.assign(new Error(code), { code }); };
 const sha = bytes => createHash('sha256').update(bytes).digest('hex');
 const same = (a,b) => a.dev === b.dev && a.ino === b.ino;
@@ -54,7 +55,9 @@ function checkedBytes(target, limit) {
 
 /** Composition-only API. Requires a real vault.withContentTransaction grant and
  * real policy tickets. Journal is advisory private profile state, never authority.
- * All existing differing files are conflicts. O_EXCL prevents file overwrite;
+ * Existing differing files are conflicts, except exact reviewed public skill
+ * metadata originals migrated with a verified private backup. O_EXCL prevents
+ * overwriting notes;
  * ancestor rechecks do not claim openat or external filesystem CAS guarantees.
  * Resume requires a freshly authorized selected vault. No stale lock is broken.
  * afterFile is a trusted interruption/progress callback, never a UI parameter. */
@@ -85,25 +88,31 @@ export function createVaultContentTransaction({ vault, policy, profileStore, dat
             await rootCheck(); const bytes=loadAdmittedContentFile(admitted,entry.source,payloadRoot);check();
             const base=entry.scope==='vault'?grant.root:methodRoot;
             const target=pathUnder(base,entry.destination,check), parent=directory(dirname(target));
-            let status='verified-existing';
+            let status='verified-existing',metadataUpgrade=null;
             try {
               const existing=checkedBytes(target,entry.bytes);
               if(existing.length!==entry.bytes || sha(existing)!==entry.sha256)fail('content_existing_conflict');
             } catch(error) {
               if(error.code==='content_existing_conflict' || error.code==='content_path_collision'){
-                journal.files[entry.source]={status:'conflict',sha256:entry.sha256};journal.state='conflicted';await save();
-                return {completed:false,state:'conflicted',manifestSHA256:plan.manifestSHA256,conflict:entry.destination};
+                metadataUpgrade=upgradeReadableSkillMetadata({entry,target,bytes,dataDir,check,privateRoot,readBytes:checkedBytes});
+                if(metadataUpgrade)status=metadataUpgrade.status;
+                else{
+                  journal.files[entry.source]={status:'conflict',sha256:entry.sha256};journal.state='conflicted';await save();
+                  return {completed:false,state:'conflicted',manifestSHA256:plan.manifestSHA256,conflict:entry.destination};
+                }
               }
-              if(error.code!=='ENOENT')throw error;
-              check(); let fd;
-              try { fd=openSync(target,constants.O_WRONLY|constants.O_CREAT|constants.O_EXCL|constants.O_NOFOLLOW,0o600); }
-              catch(error){ if(error.code==='EEXIST')fail('content_existing_conflict');throw error; }
-              try { check();writeFileSync(fd,bytes);fsyncSync(fd);check(); } finally {closeSync(fd);}
-              status='created';
+              else if(error.code!=='ENOENT')throw error;
+              if(!metadataUpgrade){
+                check(); let fd;
+                try { fd=openSync(target,constants.O_WRONLY|constants.O_CREAT|constants.O_EXCL|constants.O_NOFOLLOW,0o600); }
+                catch(error){ if(error.code==='EEXIST')fail('content_existing_conflict');throw error; }
+                try { check();writeFileSync(fd,bytes);fsyncSync(fd);check(); } finally {closeSync(fd);}
+                status='created';
+              }
             }
             check();if(!same(parent,directory(dirname(target))))fail('content_parent_changed');
             verifyContentFile(admitted,entry.source,checkedBytes(target,entry.bytes));await rootCheck();
-            journal.files[entry.source]={status,sha256:entry.sha256,readbackVerified:true};pendingCheckpoint++;
+            journal.files[entry.source]={status,sha256:entry.sha256,readbackVerified:true,...(metadataUpgrade?{originalSHA256:metadataUpgrade.originalSHA256,backup:metadataUpgrade.backup}:{})};pendingCheckpoint++;
             // Advisory progress only. Resume always rechecks every signed file,
             // including files committed after the last durable checkpoint.
             if(pendingCheckpoint>=32){await save();pendingCheckpoint=0;}

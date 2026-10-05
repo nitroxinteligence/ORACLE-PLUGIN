@@ -160,7 +160,12 @@
     if(repair&&current.localMemoryPortabilityUpdateNeeded===true)error.textContent+=` Ao atualizar, você autoriza salvar também as memórias deste segundo cérebro no vault ${current.vaultName||'selecionado'} (${current.vaultPath||''}). Captura de conversas, processamento remoto e backup mantêm suas escolhas atuais.`;
     error.classList.toggle('ob2-pending',integrating);
     const retry=progress.querySelector('.ob2-retry');retry.hidden=!failed||integrating;
-    if(failed&&!integrating&&!retry.querySelector('button'))metal(retry,'Tentar novamente',async()=>{await invoke('onboardingResume');await poll();});
+    const retryMode=current.installationError?.code==='content_existing_conflict'?'vault':'resume';
+    if(retry.dataset.mode!==retryMode){clean(retry);retry.replaceChildren();retry.dataset.mode=retryMode;}
+    if(failed&&!integrating&&!retry.querySelector('button'))metal(retry,retryMode==='vault'?'Escolher outro vault':'Tentar novamente',async()=>{
+      if(retryMode==='vault'){const selected=await invoke('onboardingChooseVault');current=await invoke('onboardingStatus');if(selected){show('install');await api.refresh?.();}else updateProgress();}
+      else{await invoke('onboardingResume');await poll();}
+    });
     if(repair&&!actions.querySelector('button')){
       plain(actions.querySelector('[data-open-codex]'),'Atualizar integração local',async()=>{
         const epoch=generation;repairing=true;openedRun=current.runID;integrationMessage='';updateProgress();

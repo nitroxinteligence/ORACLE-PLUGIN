@@ -32,7 +32,7 @@ export function createOnboardingCoordinator({policy,vault,profileStore,dataDir,k
   // gates. This coordinator deliberately never emits full-system completion.
   return {status:valid?onboardingCoordinatorPhaseStatus(current.phase,aiVerified):'not_started',localContentVerified:!!verified,localContentPhase:verified?'readback_verified':'not_verified',method:verified?current.method:null,manifestSHA256:valid?current.manifestSHA256:null,
    localProgress:{completed:valid?(current.provenPhases||[]).filter(p=>p!=='ai_memory_runtime'||aiVerified).length:0,total:required.aiMemory?5:4,confirmed:valid?(current.provenPhases||[]).filter(p=>p!=='ai_memory_runtime'||aiVerified):[]},
-   aiMemoryVerified:aiVerified,aiMemory:aiVerified?current.aiMemory:null,indexVerified:valid&&current?.indexVerified===true,pendingStages:pending,requiredComponents:required,readiness:false,completed:false,running:busy,resumable:valid&&current?.phase!=='not_started'};
+   aiMemoryVerified:aiVerified,aiMemory:aiVerified?current.aiMemory:null,indexVerified:valid&&current?.indexVerified===true,conflict:valid?current?.conflict||null:null,pendingStages:pending,requiredComponents:required,readiness:false,completed:false,running:busy,resumable:valid&&current?.phase!=='not_started'};
  };
  async function run(mode,{signal}={}){
   if(busy)fail('onboarding_busy');const selected=vault.status();if(!selected.selected)fail('vault_required');
@@ -43,12 +43,12 @@ export function createOnboardingCoordinator({policy,vault,profileStore,dataDir,k
   try{
    check();await policy.revalidateAdmission(ticket);check();await save('planning');
    const source=await sourceProvider({ticket,signal:local.signal});check();
-   const plan=createContentInstallationPlan(source?.admitted);current={...current,manifestSHA256:plan.manifestSHA256,localContentVerified:false,indexVerified:false,aiMemory:null,provenPhases:[]};
+   const plan=createContentInstallationPlan(source?.admitted);current={...current,manifestSHA256:plan.manifestSHA256,localContentVerified:false,indexVerified:false,aiMemory:null,conflict:null,provenPhases:[]};
    const sourceMethod=await verifyGBrainMethodInstallation({admitted:source.admitted,payloadRoot:source.payloadRoot,check});check();assertVerifiedGBrainMethod(sourceMethod);
    current.provenPhases=['signed_plan'];await save('planned');if(mode==='plan')return {...snapshot(),running:false,filesPlanned:plan.entries.length,methodFilesPlanned:sourceMethod.filesVerified};
    await save(mode==='resume'?'resuming':'installing');
    const result=await installer.install(plan,{payloadRoot:source.payloadRoot,signal:local.signal});check();
-   if(!result.completed){await save('conflicted');return {...snapshot(),running:false,conflict:result.conflict};}
+   if(!result.completed){current.conflict=result.conflict;await save('conflicted');return {...snapshot(),running:false};}
    current.provenPhases.push('content_files');await save('readback');
    const method=await vault.withContentTransaction(async grant=>{const verify=()=>{check();grant.check();};await grant.checkRoot();verify();
     const receipt=await verifyGBrainMethodInstallation({admitted:source.admitted,methodRoot:result.methodRoot,check:verify});await grant.checkRoot();verify();return receipt;

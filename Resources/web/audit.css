@@ -1,0 +1,27 @@
+/* Scoped reliability/2D presentation. Existing document and vault layouts are not changed. */
+.markdown-table{max-width:100%;overflow:auto;margin:18px 0}
+.markdown-table table{width:100%;border-collapse:collapse;font-size:inherit}
+.markdown-table :is(th,td){border:1px solid var(--line);padding:10px 12px;text-align:left;vertical-align:top}
+.markdown-table th{font-weight:600;background:var(--surface-field)}
+.markdown-image-alt{color:var(--muted);font-style:italic}
+.markdown-reader :is(ol,ul){padding-left:26px}.markdown-reader li>p{margin:7px 0}
+.ob-dialog footer{flex-wrap:wrap}.ob-question{border:1px solid var(--line);padding:16px;margin:20px 0;min-width:0}
+.ob-question legend{padding:0 6px;font-size:14px;line-height:1.5;max-width:100%}
+.ob-question small{display:block;color:var(--muted)}
+.ob-progress-card .ob-card-actions{display:flex;gap:8px}
+body.reduced :is(.ob-working,.ob-dialog){animation:none!important}
+body.reduced .ob-working{width:100%;opacity:.3}
+.atlas-flat .planet-surface{fill:#151617;stroke:var(--node-accent);stroke-opacity:.85;stroke-width:1}
+.atlas-flat .oracle-core>circle{fill:#151617;stroke:#92989f;stroke-width:1}
+.atlas-flat :is(.core-atmosphere,.core-orbit,.orbital-scaffolding){display:none}
+.atlas-flat .category-node.department-node .category-name{display:block;opacity:1;fill:var(--ink)}
+.atlas-flat .department-specialist .group-name{display:block;opacity:1;fill:var(--ink)}
+.atlas-flat .department-specialist .group-junction{fill:var(--node-accent);stroke:var(--node-accent)}
+.atlas-flat[data-context="department"] .atlas-expansion{display:none}
+.department-settings{display:grid;gap:14px}.department-setting{display:grid;grid-template-columns:1fr minmax(150px,1fr);gap:16px;align-items:center}
+.department-setting select{min-width:0;width:100%;padding:10px;background:var(--surface-field);color:var(--ink);border:1px solid var(--line);border-radius:8px}
+.memory-freshness{padding:12px 14px;border:1px solid var(--line);border-radius:10px;margin:12px 0;color:var(--muted);line-height:1.5}
+@media(max-width:960px){
+ .ob-dialog footer{gap:8px;padding:14px 20px}
+}
+@media(prefers-reduced-motion:reduce){.ob-working,.ob-dialog{animation:none!important}}

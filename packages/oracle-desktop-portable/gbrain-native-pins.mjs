@@ -1,0 +1,2 @@
+// Original immutable upstream Node-API addons, without Oracle compilation.
+export const GBRAIN_NATIVE_PINS=Object.freeze({"darwin-arm64":{"path":"engine-source/vendor/gbrain/native/locks/prebuilds/darwin-arm64.node","bytes":70512,"sha256":"1caa3889223ef912a190fea43891d402b7c75d134415bb1ba8de0a9b791e0833"},"win32-x64":{"path":"engine-source/vendor/gbrain/native/locks/prebuilds/win32-x64.node","bytes":35328,"sha256":"04e8bea13fe224cb12d6f71fefc67390be1777eb64cd5d129daf54b2872d53ff"}});

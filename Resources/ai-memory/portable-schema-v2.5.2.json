@@ -1,0 +1,1458 @@
+{
+  "commit": "7580b74d0fb9d14a6d949dc92f5ea8bb7feb3c83",
+  "tables": {
+    "agent_messages": [
+      {
+        "name": "id",
+        "type": "BLOB"
+      },
+      {
+        "name": "from_workspace_id",
+        "type": "BLOB"
+      },
+      {
+        "name": "from_project_id",
+        "type": "BLOB"
+      },
+      {
+        "name": "from_agent",
+        "type": "TEXT"
+      },
+      {
+        "name": "from_session_id",
+        "type": "BLOB"
+      },
+      {
+        "name": "from_owner_user",
+        "type": "TEXT"
+      },
+      {
+        "name": "to_workspace_id",
+        "type": "BLOB"
+      },
+      {
+        "name": "to_project_id",
+        "type": "BLOB"
+      },
+      {
+        "name": "subject",
+        "type": "TEXT"
+      },
+      {
+        "name": "body",
+        "type": "TEXT"
+      },
+      {
+        "name": "state",
+        "type": "TEXT"
+      },
+      {
+        "name": "created_at",
+        "type": "INTEGER"
+      },
+      {
+        "name": "claimed_at",
+        "type": "INTEGER"
+      },
+      {
+        "name": "claimed_by_session",
+        "type": "BLOB"
+      },
+      {
+        "name": "claimed_by_agent",
+        "type": "TEXT"
+      },
+      {
+        "name": "claimed_by_user",
+        "type": "TEXT"
+      }
+    ],
+    "api_credentials": [
+      {
+        "name": "id",
+        "type": "BLOB"
+      },
+      {
+        "name": "user_id",
+        "type": "BLOB"
+      },
+      {
+        "name": "label",
+        "type": "TEXT"
+      },
+      {
+        "name": "token_hash",
+        "type": "BLOB"
+      },
+      {
+        "name": "preview",
+        "type": "TEXT"
+      },
+      {
+        "name": "created_at",
+        "type": "INTEGER"
+      },
+      {
+        "name": "last_used_at",
+        "type": "INTEGER"
+      },
+      {
+        "name": "expires_at",
+        "type": "INTEGER"
+      },
+      {
+        "name": "revoked_at",
+        "type": "INTEGER"
+      }
+    ],
+    "audit_log": [
+      {
+        "name": "id",
+        "type": "INTEGER"
+      },
+      {
+        "name": "at",
+        "type": "INTEGER"
+      },
+      {
+        "name": "op",
+        "type": "TEXT"
+      },
+      {
+        "name": "workspace_id",
+        "type": "BLOB"
+      },
+      {
+        "name": "project_id",
+        "type": "BLOB"
+      },
+      {
+        "name": "page_id",
+        "type": "BLOB"
+      },
+      {
+        "name": "detail",
+        "type": "TEXT"
+      },
+      {
+        "name": "author_id",
+        "type": "BLOB"
+      }
+    ],
+    "auto_improve_proposal_events": [
+      {
+        "name": "id",
+        "type": "INTEGER"
+      },
+      {
+        "name": "proposal_id",
+        "type": "BLOB"
+      },
+      {
+        "name": "event",
+        "type": "TEXT"
+      },
+      {
+        "name": "actor_json",
+        "type": "TEXT"
+      },
+      {
+        "name": "author_id",
+        "type": "BLOB"
+      },
+      {
+        "name": "detail_json",
+        "type": "TEXT"
+      },
+      {
+        "name": "at",
+        "type": "INTEGER"
+      }
+    ],
+    "auto_improve_proposals": [
+      {
+        "name": "id",
+        "type": "BLOB"
+      },
+      {
+        "name": "run_id",
+        "type": "BLOB"
+      },
+      {
+        "name": "workspace_id",
+        "type": "BLOB"
+      },
+      {
+        "name": "project_id",
+        "type": "BLOB"
+      },
+      {
+        "name": "status",
+        "type": "TEXT"
+      },
+      {
+        "name": "operation",
+        "type": "TEXT"
+      },
+      {
+        "name": "target_path",
+        "type": "TEXT"
+      },
+      {
+        "name": "kind",
+        "type": "TEXT"
+      },
+      {
+        "name": "title",
+        "type": "TEXT"
+      },
+      {
+        "name": "confidence",
+        "type": "REAL"
+      },
+      {
+        "name": "rationale",
+        "type": "TEXT"
+      },
+      {
+        "name": "evidence_json",
+        "type": "TEXT"
+      },
+      {
+        "name": "body_markdown",
+        "type": "TEXT"
+      },
+      {
+        "name": "body_sha256",
+        "type": "BLOB"
+      },
+      {
+        "name": "artifact_path",
+        "type": "TEXT"
+      },
+      {
+        "name": "artifact_sha256",
+        "type": "BLOB"
+      },
+      {
+        "name": "target_latest_page_id_at_stage",
+        "type": "BLOB"
+      },
+      {
+        "name": "target_body_sha256_at_stage",
+        "type": "BLOB"
+      },
+      {
+        "name": "target_updated_at_at_stage",
+        "type": "INTEGER"
+      },
+      {
+        "name": "staged_at",
+        "type": "INTEGER"
+      },
+      {
+        "name": "decided_at",
+        "type": "INTEGER"
+      },
+      {
+        "name": "decision_reason",
+        "type": "TEXT"
+      },
+      {
+        "name": "decided_by_author_id",
+        "type": "BLOB"
+      },
+      {
+        "name": "decided_by_actor_json",
+        "type": "TEXT"
+      },
+      {
+        "name": "applied_page_id",
+        "type": "BLOB"
+      },
+      {
+        "name": "checkpoint",
+        "type": "TEXT"
+      },
+      {
+        "name": "edit_mode",
+        "type": "TEXT"
+      },
+      {
+        "name": "patch_json",
+        "type": "TEXT"
+      },
+      {
+        "name": "expected_base_body_sha256",
+        "type": "BLOB"
+      },
+      {
+        "name": "materialized_base_body_sha256",
+        "type": "BLOB"
+      },
+      {
+        "name": "staged_by_actor_user",
+        "type": "TEXT"
+      }
+    ],
+    "auto_improve_rejections": [
+      {
+        "name": "id",
+        "type": "BLOB"
+      },
+      {
+        "name": "workspace_id",
+        "type": "BLOB"
+      },
+      {
+        "name": "project_id",
+        "type": "BLOB"
+      },
+      {
+        "name": "target_path",
+        "type": "TEXT"
+      },
+      {
+        "name": "kind",
+        "type": "TEXT"
+      },
+      {
+        "name": "operation",
+        "type": "TEXT"
+      },
+      {
+        "name": "edit_mode",
+        "type": "TEXT"
+      },
+      {
+        "name": "reason",
+        "type": "TEXT"
+      },
+      {
+        "name": "normalized_fingerprint",
+        "type": "TEXT"
+      },
+      {
+        "name": "summary",
+        "type": "TEXT"
+      },
+      {
+        "name": "evidence_json",
+        "type": "TEXT"
+      },
+      {
+        "name": "source_run_id",
+        "type": "BLOB"
+      },
+      {
+        "name": "source_proposal_id",
+        "type": "BLOB"
+      },
+      {
+        "name": "created_at",
+        "type": "INTEGER"
+      }
+    ],
+    "auto_improve_runs": [
+      {
+        "name": "id",
+        "type": "BLOB"
+      },
+      {
+        "name": "workspace_id",
+        "type": "BLOB"
+      },
+      {
+        "name": "project_id",
+        "type": "BLOB"
+      },
+      {
+        "name": "session_id",
+        "type": "BLOB"
+      },
+      {
+        "name": "provider",
+        "type": "TEXT"
+      },
+      {
+        "name": "model",
+        "type": "TEXT"
+      },
+      {
+        "name": "summary",
+        "type": "TEXT"
+      },
+      {
+        "name": "warnings_json",
+        "type": "TEXT"
+      },
+      {
+        "name": "rejected_candidates_json",
+        "type": "TEXT"
+      },
+      {
+        "name": "config_json",
+        "type": "TEXT"
+      },
+      {
+        "name": "proposal_actor_json",
+        "type": "TEXT"
+      },
+      {
+        "name": "created_at",
+        "type": "INTEGER"
+      }
+    ],
+    "auto_improve_scheduler_claims": [
+      {
+        "name": "workspace_id",
+        "type": "BLOB"
+      },
+      {
+        "name": "project_id",
+        "type": "BLOB"
+      },
+      {
+        "name": "session_id",
+        "type": "BLOB"
+      },
+      {
+        "name": "claimed_at",
+        "type": "INTEGER"
+      },
+      {
+        "name": "attempts",
+        "type": "INTEGER"
+      },
+      {
+        "name": "last_error",
+        "type": "TEXT"
+      },
+      {
+        "name": "last_failed_at",
+        "type": "INTEGER"
+      }
+    ],
+    "auto_improve_scheduler_state": [
+      {
+        "name": "workspace_id",
+        "type": "BLOB"
+      },
+      {
+        "name": "project_id",
+        "type": "BLOB"
+      },
+      {
+        "name": "watermark_ended_at",
+        "type": "INTEGER"
+      },
+      {
+        "name": "initialized_at",
+        "type": "INTEGER"
+      },
+      {
+        "name": "updated_at",
+        "type": "INTEGER"
+      },
+      {
+        "name": "last_experience_run_at",
+        "type": "INTEGER"
+      }
+    ],
+    "bootstrap_chunk_progress": [
+      {
+        "name": "fingerprint",
+        "type": "TEXT"
+      },
+      {
+        "name": "chunk_index",
+        "type": "INTEGER"
+      },
+      {
+        "name": "pages_json",
+        "type": "TEXT"
+      },
+      {
+        "name": "rationale",
+        "type": "TEXT"
+      },
+      {
+        "name": "created_at",
+        "type": "INTEGER"
+      }
+    ],
+    "client_activity": [
+      {
+        "name": "client",
+        "type": "TEXT"
+      },
+      {
+        "name": "day",
+        "type": "INTEGER"
+      },
+      {
+        "name": "reads",
+        "type": "INTEGER"
+      },
+      {
+        "name": "writes",
+        "type": "INTEGER"
+      }
+    ],
+    "entities": [
+      {
+        "name": "id",
+        "type": "BLOB"
+      },
+      {
+        "name": "workspace_id",
+        "type": "BLOB"
+      },
+      {
+        "name": "project_id",
+        "type": "BLOB"
+      },
+      {
+        "name": "name",
+        "type": "TEXT"
+      },
+      {
+        "name": "created_at",
+        "type": "INTEGER"
+      }
+    ],
+    "entity_page_links": [
+      {
+        "name": "entity_id",
+        "type": "BLOB"
+      },
+      {
+        "name": "page_id",
+        "type": "BLOB"
+      },
+      {
+        "name": "valid_from",
+        "type": "INTEGER"
+      },
+      {
+        "name": "superseded_at",
+        "type": "INTEGER"
+      }
+    ],
+    "handoffs": [
+      {
+        "name": "id",
+        "type": "BLOB"
+      },
+      {
+        "name": "workspace_id",
+        "type": "BLOB"
+      },
+      {
+        "name": "project_id",
+        "type": "BLOB"
+      },
+      {
+        "name": "from_session_id",
+        "type": "BLOB"
+      },
+      {
+        "name": "from_agent",
+        "type": "TEXT"
+      },
+      {
+        "name": "to_agent",
+        "type": "TEXT"
+      },
+      {
+        "name": "cwd",
+        "type": "TEXT"
+      },
+      {
+        "name": "summary",
+        "type": "TEXT"
+      },
+      {
+        "name": "open_questions",
+        "type": "TEXT"
+      },
+      {
+        "name": "next_steps",
+        "type": "TEXT"
+      },
+      {
+        "name": "files_touched",
+        "type": "TEXT"
+      },
+      {
+        "name": "state",
+        "type": "TEXT"
+      },
+      {
+        "name": "created_at",
+        "type": "INTEGER"
+      },
+      {
+        "name": "accepted_by",
+        "type": "TEXT"
+      },
+      {
+        "name": "accepted_at",
+        "type": "INTEGER"
+      },
+      {
+        "name": "accepted_by_session",
+        "type": "BLOB"
+      },
+      {
+        "name": "owner_user",
+        "type": "TEXT"
+      },
+      {
+        "name": "accepted_by_user",
+        "type": "TEXT"
+      }
+    ],
+    "human_auth_state": [
+      {
+        "name": "id",
+        "type": "INTEGER"
+      },
+      {
+        "name": "bootstrap_completed",
+        "type": "INTEGER"
+      }
+    ],
+    "ingest_keys": [
+      {
+        "name": "project_id",
+        "type": "BLOB"
+      },
+      {
+        "name": "key",
+        "type": "TEXT"
+      },
+      {
+        "name": "seen_at",
+        "type": "INTEGER"
+      },
+      {
+        "name": "completed_at",
+        "type": "INTEGER"
+      }
+    ],
+    "links": [
+      {
+        "name": "from_page_id",
+        "type": "BLOB"
+      },
+      {
+        "name": "to_page_id",
+        "type": "BLOB"
+      },
+      {
+        "name": "to_workspace",
+        "type": "TEXT"
+      },
+      {
+        "name": "to_project",
+        "type": "TEXT"
+      },
+      {
+        "name": "to_path",
+        "type": "TEXT"
+      },
+      {
+        "name": "link_type",
+        "type": "TEXT"
+      }
+    ],
+    "maintenance_scheduler_state": [
+      {
+        "name": "job",
+        "type": "TEXT"
+      },
+      {
+        "name": "last_success_at",
+        "type": "INTEGER"
+      }
+    ],
+    "managed_runs": [
+      {
+        "name": "id",
+        "type": "BLOB"
+      },
+      {
+        "name": "workstream_id",
+        "type": "BLOB"
+      },
+      {
+        "name": "agent_kind",
+        "type": "TEXT"
+      },
+      {
+        "name": "lease_owner",
+        "type": "TEXT"
+      },
+      {
+        "name": "native_session_id",
+        "type": "TEXT"
+      },
+      {
+        "name": "state",
+        "type": "TEXT"
+      },
+      {
+        "name": "sync_after",
+        "type": "INTEGER"
+      },
+      {
+        "name": "sync_through",
+        "type": "INTEGER"
+      },
+      {
+        "name": "context_delivered",
+        "type": "INTEGER"
+      },
+      {
+        "name": "lease_expires_at",
+        "type": "INTEGER"
+      },
+      {
+        "name": "started_at",
+        "type": "INTEGER"
+      },
+      {
+        "name": "ended_at",
+        "type": "INTEGER"
+      },
+      {
+        "name": "exit_code",
+        "type": "INTEGER"
+      },
+      {
+        "name": "native_session_linked_at",
+        "type": "INTEGER"
+      }
+    ],
+    "observations": [
+      {
+        "name": "id",
+        "type": "BLOB"
+      },
+      {
+        "name": "session_id",
+        "type": "BLOB"
+      },
+      {
+        "name": "workspace_id",
+        "type": "BLOB"
+      },
+      {
+        "name": "project_id",
+        "type": "BLOB"
+      },
+      {
+        "name": "kind",
+        "type": "TEXT"
+      },
+      {
+        "name": "title",
+        "type": "TEXT"
+      },
+      {
+        "name": "body",
+        "type": "TEXT"
+      },
+      {
+        "name": "importance",
+        "type": "INTEGER"
+      },
+      {
+        "name": "created_at",
+        "type": "INTEGER"
+      },
+      {
+        "name": "extension",
+        "type": "TEXT"
+      },
+      {
+        "name": "source_event",
+        "type": "TEXT"
+      }
+    ],
+    "page_abstract_embeddings": [
+      {
+        "name": "page_id",
+        "type": "BLOB"
+      },
+      {
+        "name": "vector",
+        "type": "BLOB"
+      },
+      {
+        "name": "provider",
+        "type": "TEXT"
+      },
+      {
+        "name": "model",
+        "type": "TEXT"
+      },
+      {
+        "name": "dim",
+        "type": "INTEGER"
+      },
+      {
+        "name": "created_at",
+        "type": "INTEGER"
+      }
+    ],
+    "page_access": [
+      {
+        "name": "page_id",
+        "type": "BLOB"
+      },
+      {
+        "name": "actor",
+        "type": "TEXT"
+      }
+    ],
+    "page_embed_failures": [
+      {
+        "name": "page_id",
+        "type": "BLOB"
+      },
+      {
+        "name": "at",
+        "type": "INTEGER"
+      },
+      {
+        "name": "outcome",
+        "type": "TEXT"
+      },
+      {
+        "name": "detail",
+        "type": "TEXT"
+      }
+    ],
+    "page_embeddings": [
+      {
+        "name": "page_id",
+        "type": "BLOB"
+      },
+      {
+        "name": "vector",
+        "type": "BLOB"
+      },
+      {
+        "name": "provider",
+        "type": "TEXT"
+      },
+      {
+        "name": "model",
+        "type": "TEXT"
+      },
+      {
+        "name": "dim",
+        "type": "INTEGER"
+      },
+      {
+        "name": "created_at",
+        "type": "INTEGER"
+      }
+    ],
+    "page_evidence": [
+      {
+        "name": "page_id",
+        "type": "BLOB"
+      },
+      {
+        "name": "source_kind",
+        "type": "TEXT"
+      },
+      {
+        "name": "source_id",
+        "type": "TEXT"
+      },
+      {
+        "name": "created_at",
+        "type": "INTEGER"
+      }
+    ],
+    "page_feedback": [
+      {
+        "name": "id",
+        "type": "BLOB"
+      },
+      {
+        "name": "page_id",
+        "type": "BLOB"
+      },
+      {
+        "name": "workspace_id",
+        "type": "BLOB"
+      },
+      {
+        "name": "project_id",
+        "type": "BLOB"
+      },
+      {
+        "name": "kind",
+        "type": "TEXT"
+      },
+      {
+        "name": "reason",
+        "type": "TEXT"
+      },
+      {
+        "name": "salience_after",
+        "type": "REAL"
+      },
+      {
+        "name": "author_id",
+        "type": "BLOB"
+      },
+      {
+        "name": "created_at",
+        "type": "INTEGER"
+      }
+    ],
+    "pages": [
+      {
+        "name": "id",
+        "type": "BLOB"
+      },
+      {
+        "name": "workspace_id",
+        "type": "BLOB"
+      },
+      {
+        "name": "project_id",
+        "type": "BLOB"
+      },
+      {
+        "name": "path",
+        "type": "TEXT"
+      },
+      {
+        "name": "title",
+        "type": "TEXT"
+      },
+      {
+        "name": "tier",
+        "type": "TEXT"
+      },
+      {
+        "name": "body",
+        "type": "TEXT"
+      },
+      {
+        "name": "body_sha256",
+        "type": "BLOB"
+      },
+      {
+        "name": "frontmatter_json",
+        "type": "TEXT"
+      },
+      {
+        "name": "is_latest",
+        "type": "INTEGER"
+      },
+      {
+        "name": "supersedes",
+        "type": "BLOB"
+      },
+      {
+        "name": "pinned",
+        "type": "INTEGER"
+      },
+      {
+        "name": "created_at",
+        "type": "INTEGER"
+      },
+      {
+        "name": "updated_at",
+        "type": "INTEGER"
+      },
+      {
+        "name": "embedding_provider",
+        "type": "TEXT"
+      },
+      {
+        "name": "embedding_model",
+        "type": "TEXT"
+      },
+      {
+        "name": "embedding_dim",
+        "type": "INTEGER"
+      },
+      {
+        "name": "last_accessed_at",
+        "type": "INTEGER"
+      },
+      {
+        "name": "access_count",
+        "type": "INTEGER"
+      },
+      {
+        "name": "superseded_at",
+        "type": "INTEGER"
+      },
+      {
+        "name": "author_id",
+        "type": "BLOB"
+      },
+      {
+        "name": "path_search",
+        "type": "TEXT"
+      },
+      {
+        "name": "expires_at",
+        "type": "INTEGER"
+      },
+      {
+        "name": "salience",
+        "type": "REAL"
+      },
+      {
+        "name": "valid_from",
+        "type": "INTEGER"
+      },
+      {
+        "name": "valid_to",
+        "type": "INTEGER"
+      },
+      {
+        "name": "compacted_at",
+        "type": "INTEGER"
+      }
+    ],
+    "project_grants": [
+      {
+        "name": "workspace_id",
+        "type": "BLOB"
+      },
+      {
+        "name": "project_id",
+        "type": "BLOB"
+      },
+      {
+        "name": "user_id",
+        "type": "BLOB"
+      },
+      {
+        "name": "level",
+        "type": "TEXT"
+      },
+      {
+        "name": "granted_by",
+        "type": "BLOB"
+      },
+      {
+        "name": "granted_at",
+        "type": "INTEGER"
+      }
+    ],
+    "projects": [
+      {
+        "name": "id",
+        "type": "BLOB"
+      },
+      {
+        "name": "workspace_id",
+        "type": "BLOB"
+      },
+      {
+        "name": "name",
+        "type": "TEXT"
+      },
+      {
+        "name": "repo_path",
+        "type": "TEXT"
+      },
+      {
+        "name": "created_at",
+        "type": "INTEGER"
+      },
+      {
+        "name": "access_mode",
+        "type": "TEXT"
+      },
+      {
+        "name": "created_by",
+        "type": "BLOB"
+      },
+      {
+        "name": "identity",
+        "type": "TEXT"
+      },
+      {
+        "name": "identity_source",
+        "type": "TEXT"
+      }
+    ],
+    "purged_scopes": [
+      {
+        "name": "workspace_id",
+        "type": "BLOB"
+      },
+      {
+        "name": "project_id",
+        "type": "BLOB"
+      },
+      {
+        "name": "purged_at",
+        "type": "INTEGER"
+      }
+    ],
+    "purged_sessions": [
+      {
+        "name": "session_id",
+        "type": "BLOB"
+      },
+      {
+        "name": "workspace_id",
+        "type": "BLOB"
+      },
+      {
+        "name": "project_id",
+        "type": "BLOB"
+      },
+      {
+        "name": "purged_at",
+        "type": "INTEGER"
+      }
+    ],
+    "session_consolidation_jobs": [
+      {
+        "name": "session_id",
+        "type": "BLOB"
+      },
+      {
+        "name": "workspace_id",
+        "type": "BLOB"
+      },
+      {
+        "name": "project_id",
+        "type": "BLOB"
+      },
+      {
+        "name": "generation",
+        "type": "INTEGER"
+      },
+      {
+        "name": "state",
+        "type": "TEXT"
+      },
+      {
+        "name": "requested_at",
+        "type": "INTEGER"
+      },
+      {
+        "name": "next_attempt_at",
+        "type": "INTEGER"
+      },
+      {
+        "name": "started_at",
+        "type": "INTEGER"
+      },
+      {
+        "name": "completed_at",
+        "type": "INTEGER"
+      },
+      {
+        "name": "attempts",
+        "type": "INTEGER"
+      },
+      {
+        "name": "claim_id",
+        "type": "BLOB"
+      },
+      {
+        "name": "last_error",
+        "type": "TEXT"
+      }
+    ],
+    "sessions": [
+      {
+        "name": "id",
+        "type": "BLOB"
+      },
+      {
+        "name": "workspace_id",
+        "type": "BLOB"
+      },
+      {
+        "name": "project_id",
+        "type": "BLOB"
+      },
+      {
+        "name": "agent_kind",
+        "type": "TEXT"
+      },
+      {
+        "name": "cwd",
+        "type": "TEXT"
+      },
+      {
+        "name": "started_at",
+        "type": "INTEGER"
+      },
+      {
+        "name": "ended_at",
+        "type": "INTEGER"
+      },
+      {
+        "name": "summary_page_id",
+        "type": "BLOB"
+      },
+      {
+        "name": "ended_observation_count",
+        "type": "INTEGER"
+      },
+      {
+        "name": "actor_user",
+        "type": "TEXT"
+      }
+    ],
+    "users": [
+      {
+        "name": "id",
+        "type": "BLOB"
+      },
+      {
+        "name": "username",
+        "type": "TEXT"
+      },
+      {
+        "name": "name",
+        "type": "TEXT"
+      },
+      {
+        "name": "email",
+        "type": "TEXT"
+      },
+      {
+        "name": "token_hash",
+        "type": "BLOB"
+      },
+      {
+        "name": "created_at",
+        "type": "INTEGER"
+      },
+      {
+        "name": "last_seen_at",
+        "type": "INTEGER"
+      },
+      {
+        "name": "token_expired_at",
+        "type": "INTEGER"
+      },
+      {
+        "name": "role",
+        "type": "TEXT"
+      },
+      {
+        "name": "password_hash",
+        "type": "TEXT"
+      },
+      {
+        "name": "must_change_password",
+        "type": "INTEGER"
+      },
+      {
+        "name": "disabled_at",
+        "type": "INTEGER"
+      }
+    ],
+    "web_sessions": [
+      {
+        "name": "id",
+        "type": "BLOB"
+      },
+      {
+        "name": "session_hash",
+        "type": "BLOB"
+      },
+      {
+        "name": "user_id",
+        "type": "BLOB"
+      },
+      {
+        "name": "csrf_hash",
+        "type": "BLOB"
+      },
+      {
+        "name": "created_at",
+        "type": "INTEGER"
+      },
+      {
+        "name": "last_used_at",
+        "type": "INTEGER"
+      },
+      {
+        "name": "expires_at",
+        "type": "INTEGER"
+      },
+      {
+        "name": "revoked_at",
+        "type": "INTEGER"
+      }
+    ],
+    "wiki_migrations": [
+      {
+        "name": "name",
+        "type": "TEXT"
+      },
+      {
+        "name": "applied_at",
+        "type": "INTEGER"
+      }
+    ],
+    "workspaces": [
+      {
+        "name": "id",
+        "type": "BLOB"
+      },
+      {
+        "name": "name",
+        "type": "TEXT"
+      },
+      {
+        "name": "created_at",
+        "type": "INTEGER"
+      }
+    ],
+    "workstream_events": [
+      {
+        "name": "workstream_id",
+        "type": "BLOB"
+      },
+      {
+        "name": "sequence",
+        "type": "INTEGER"
+      },
+      {
+        "name": "event_id",
+        "type": "TEXT"
+      },
+      {
+        "name": "agent_kind",
+        "type": "TEXT"
+      },
+      {
+        "name": "native_session_id",
+        "type": "TEXT"
+      },
+      {
+        "name": "source_record_id",
+        "type": "TEXT"
+      },
+      {
+        "name": "kind",
+        "type": "TEXT"
+      },
+      {
+        "name": "role",
+        "type": "TEXT"
+      },
+      {
+        "name": "content",
+        "type": "TEXT"
+      },
+      {
+        "name": "occurred_at",
+        "type": "TEXT"
+      },
+      {
+        "name": "metadata_json",
+        "type": "TEXT"
+      },
+      {
+        "name": "segment_path",
+        "type": "TEXT"
+      },
+      {
+        "name": "created_at",
+        "type": "INTEGER"
+      }
+    ],
+    "workstream_native_sessions": [
+      {
+        "name": "workstream_id",
+        "type": "BLOB"
+      },
+      {
+        "name": "agent_kind",
+        "type": "TEXT"
+      },
+      {
+        "name": "native_session_id",
+        "type": "TEXT"
+      },
+      {
+        "name": "is_current",
+        "type": "INTEGER"
+      },
+      {
+        "name": "source_cursor",
+        "type": "TEXT"
+      },
+      {
+        "name": "delivery_cursor",
+        "type": "INTEGER"
+      },
+      {
+        "name": "created_at",
+        "type": "INTEGER"
+      },
+      {
+        "name": "updated_at",
+        "type": "INTEGER"
+      }
+    ],
+    "workstreams": [
+      {
+        "name": "id",
+        "type": "BLOB"
+      },
+      {
+        "name": "workspace_id",
+        "type": "BLOB"
+      },
+      {
+        "name": "project_id",
+        "type": "BLOB"
+      },
+      {
+        "name": "repo_fingerprint",
+        "type": "TEXT"
+      },
+      {
+        "name": "worktree_fingerprint",
+        "type": "TEXT"
+      },
+      {
+        "name": "name",
+        "type": "TEXT"
+      },
+      {
+        "name": "cwd",
+        "type": "TEXT"
+      },
+      {
+        "name": "created_at",
+        "type": "INTEGER"
+      },
+      {
+        "name": "selected_at",
+        "type": "INTEGER"
+      },
+      {
+        "name": "updated_at",
+        "type": "INTEGER"
+      }
+    ]
+  },
+  "version": "2.5.2"
+}

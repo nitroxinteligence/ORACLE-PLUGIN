@@ -1,0 +1,35 @@
+name: Qualified Oracle release
+on:
+  push:
+    branches: [main]
+    paths: [packages/**, Resources/**, scripts/**, .github/workflows/portable-release.yml]
+  schedule:
+    - cron: '23 9 * * *'
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: Validate candidate or publish qualified release
+        type: choice
+        options: [release, validate]
+        default: release
+permissions:
+  contents: write
+concurrency:
+  group: oracle-portable-release
+  cancel-in-progress: false
+jobs:
+  release:
+    if: github.repository == 'nitroxinteligence/ORACLE-PLUGIN'
+    runs-on: macos-15
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - name: Qualify and publish immutable original components
+        env:
+          ORACLE_DISTRIBUTION_KEY: ${{ secrets.ORACLE_DISTRIBUTION_KEY }}
+          GH_TOKEN: ${{ github.token }}
+          EVENT_NAME: ${{ github.event_name }}
+          RELEASE_MODE: ${{ inputs.mode || 'release' }}
+        run: python3 scripts/release-portable.py --event "$EVENT_NAME" --mode "$RELEASE_MODE"

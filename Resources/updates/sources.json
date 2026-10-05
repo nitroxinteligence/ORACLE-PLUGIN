@@ -1,0 +1,36 @@
+{
+  "schema_version": 1,
+  "oracle_version": "0.3.27",
+  "oracle": {
+    "repository": "https://github.com/nitroxinteligence/ORACLE",
+    "release_api": "https://api.github.com/repos/nitroxinteligence/ORACLE/releases/latest"
+  },
+  "gbrain": {
+    "repository": "https://github.com/garrytan/gbrain",
+    "bundled_version": "0.48.4.0",
+    "adapter_commit": "2efaaf8f8a817b5b82e023383618fdcdb1cc5f7d",
+    "compatible_releases": [
+      {
+        "tag": "v0.48.4.0",
+        "version": "0.48.4.0",
+        "commit": "2efaaf8f8a817b5b82e023383618fdcdb1cc5f7d",
+        "asset": "gbrain-darwin-arm64",
+        "sha256": "4b54e4479d3284acab0c3d772a21a2cd93d5d9e977bee1a93f561f5bd9ceca79",
+        "platform": "darwin-arm64",
+        "minimum_oracle": "0.2.0",
+        "upstream_sha256": "4b54e4479d3284acab0c3d772a21a2cd93d5d9e977bee1a93f561f5bd9ceca79",
+        "database_compatibility": "same-schema"
+      }
+    ]
+  },
+  "cognee": {
+    "repository": "https://github.com/topoteretes/cognee",
+    "adopted": false
+  },
+  "skills": {
+    "repository": "https://github.com/nitroxinteligence/ORACLE-SKILLS",
+    "manifest_asset": "oracle-distribution.json",
+    "schema_version": 3,
+    "trust_keys": "distribution-keys.json"
+  }
+}

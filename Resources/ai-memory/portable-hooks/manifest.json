@@ -1,0 +1,86 @@
+{
+  "version": "2.5.2",
+  "commit": "7580b74d0fb9d14a6d949dc92f5ea8bb7feb3c83",
+  "files": [
+    {
+      "path": "_lib.sh",
+      "bytes": 40936,
+      "sha256": "050b24ea52e1cc99135467bbeffbc7982adb6bdd2c3b4d2ccb679660a500ed83"
+    },
+    {
+      "path": "codex/post-tool-use.ps1",
+      "bytes": 109,
+      "sha256": "32aab7909f5a38760caf696df983b86743dbe88b051f449351684800e58a3d33"
+    },
+    {
+      "path": "codex/post-tool-use.sh",
+      "bytes": 488,
+      "sha256": "a5a37303f9a70f1b9120d1a2a5ce00c6b7b8d670c5631e4b64cca6dca578c5e4"
+    },
+    {
+      "path": "codex/pre-compact.ps1",
+      "bytes": 107,
+      "sha256": "1e1a6836391aa9181f01fb870d35a2fa231de42c02148f9e13411326ed4f506f"
+    },
+    {
+      "path": "codex/pre-compact.sh",
+      "bytes": 484,
+      "sha256": "562a182d1a843db31b6ab4bb7635d59e7f518d25c041a2620fa4201d772d992d"
+    },
+    {
+      "path": "codex/pre-tool-use.ps1",
+      "bytes": 108,
+      "sha256": "5ace1cee570b8e4fef22c07a92c2db67c531d8daeea19972ae6bfb24c0d377a2"
+    },
+    {
+      "path": "codex/pre-tool-use.sh",
+      "bytes": 486,
+      "sha256": "3441f9227c9b567f23bd2316cdfa4f04d6c6d41a64e57f2104e49190ff1dc48e"
+    },
+    {
+      "path": "codex/session-end.ps1",
+      "bytes": 107,
+      "sha256": "4ea7fbb378a37f0afcc4901fdd9cc3fd8a34c6a1e6f496bde7e3b01ffe761dec"
+    },
+    {
+      "path": "codex/session-end.sh",
+      "bytes": 484,
+      "sha256": "fb8788f5350189f2e8d90f9297d569af6d5be420c9580b858ba5d6663d374e44"
+    },
+    {
+      "path": "codex/session-start.ps1",
+      "bytes": 123,
+      "sha256": "d80f33ec9c1c0ef985029c00da6632377be8419358a4a1f4f2282b183a5bb32a"
+    },
+    {
+      "path": "codex/session-start.sh",
+      "bytes": 1098,
+      "sha256": "7718f8a537f2d01308d91df7a98d328474aed92363587a23066a05bc0eb99c27"
+    },
+    {
+      "path": "codex/stop.ps1",
+      "bytes": 100,
+      "sha256": "fb68e9121056b039a0edcb1eaa68802d3de7d373e47d2b16586fb235a40de451"
+    },
+    {
+      "path": "codex/stop.sh",
+      "bytes": 470,
+      "sha256": "cacbba4dd7ce7766d87cdb9c0e932a7e42872d1084514fb9ed83946da1dfaf1a"
+    },
+    {
+      "path": "codex/user-prompt-submit.ps1",
+      "bytes": 107,
+      "sha256": "ab4526d909dfcc05d5de3bcd3838c29746bb3e9b3d08dc5b9108a13d4534c252"
+    },
+    {
+      "path": "codex/user-prompt-submit.sh",
+      "bytes": 484,
+      "sha256": "f6b9b799c99ce1c46b44f84f74256c47395ed45505cd48de3596dfc4e406bb85"
+    },
+    {
+      "path": "lib/ai-memory-hook.ps1",
+      "bytes": 27324,
+      "sha256": "27936c820a112986e1385e7bff218075929d6aaa1780b8923115015b6ab2b15b"
+    }
+  ]
+}

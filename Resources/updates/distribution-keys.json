@@ -1,0 +1,14 @@
+{
+  "schema_version": 1,
+  "algorithm": "Ed25519",
+  "keys": [
+    {
+      "id": "oracle-distribution-20260912",
+      "public_key_base64": "TLshOAwV4/WKSbBuOyiItx3BhldW5FmEkBWqDpyAuT8="
+    },
+    {
+      "id": "oracle-distribution-20260916-v2",
+      "public_key_base64": "ILB3CGT8jipKwSOkHD2evm30HMxl9vJSeL9CgMreKJk="
+    }
+  ]
+}

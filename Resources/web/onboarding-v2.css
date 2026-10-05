@@ -1,0 +1,89 @@
+/* Fullscreen V2 installation surface. Scoped to preserve all other app screens. */
+.oracle-onboarding-v2{font-family:-apple-system,BlinkMacSystemFont,sans-serif;color:#eee}
+body.ob2-configuring #app{visibility:hidden}
+.oracle-onboarding-v2 .ob2-screen{position:fixed;inset:0;width:100vw;max-width:none;height:100vh;max-height:none;margin:0;padding:0;border:0;border-radius:0;background:#070707;box-shadow:none;color:#eee;overflow:auto;backdrop-filter:none}
+.ob2-screen::backdrop{background:transparent;backdrop-filter:none}
+.ob2-space{position:fixed;inset:0;overflow:hidden;pointer-events:none}
+.ob2-stars{position:absolute;inset:0}.ob2-stars i{position:absolute;width:2px;height:2px;border-radius:50%;background:#dbe5ec}
+.ob2-orbits{position:absolute;left:50%;top:50%;width:1400px;height:1400px;transform:translate(-50%,-50%);border-radius:50%;background:repeating-radial-gradient(circle,transparent 0 65px,#dbe5ec08 66px,transparent 67px 103px);mask-image:radial-gradient(circle,#0007 0,#000 40%,transparent 71%);-webkit-mask-image:radial-gradient(circle,#0007 0,#000 40%,transparent 71%)}
+.ob2-content{position:relative;z-index:1;min-height:100%;width:min(480px,calc(100vw - 48px));margin:auto;padding:72px 0;box-sizing:border-box;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center}
+.ob2-content .ob2-logo{width:264px;flex:none;margin:0 0 38px}
+.ob2-content h1{font-size:28px;font-weight:500;line-height:1.35;letter-spacing:-.6px;margin:0 0 25px}
+.ob2-content h1.ob2-intro{font-size:17px;font-weight:400;line-height:1.65;letter-spacing:0;color:#bdbdbd;max-width:365px;margin-bottom:28px}
+.ob2-description{font-size:14px;line-height:1.7;color:#aaa;margin:0 0 26px;max-width:425px}
+.ob2-key-form{width:100%;max-width:344px;display:flex;align-items:center;flex-direction:column;gap:28px}
+.ob2-key-form input{width:100%;height:54px;border:1px solid #ffffff27;border-radius:13px;background:#0b0b0b;color:#eee;text-align:center;padding:0 20px;font-size:19px;letter-spacing:5px;outline:none;box-sizing:border-box;transition:border-color .2s,box-shadow .2s}
+.ob2-key-form input:focus{border-color:#ffffff70;box-shadow:0 0 0 3px #ffffff04}.ob2-key-form input[aria-invalid=true]{border-color:#ff6262;box-shadow:0 0 0 3px #fa555514}
+.ob2-key-form input::placeholder{color:#777;font-size:22px;letter-spacing:7px}
+.ob2-sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}
+.ob2-action{display:inline-flex;justify-content:center;margin-top:5px;min-height:54px}
+.ob2-metal-button{position:relative!important;isolation:isolate;min-width:138px;height:52px;padding:0 24px!important;border-radius:28px!important;border:1px solid #fff9!important;background:linear-gradient(155deg,#bac8d1,#f7f7f7 33%,#9aa3ac 60%,#f6f6f6 88%)!important;color:#272727!important;font:500 18px/1 -apple-system,BlinkMacSystemFont,sans-serif!important;cursor:pointer;overflow:hidden;box-shadow:inset 0 1px 2px #fff,0 0 28px #c7daf315!important;transition:transform .2s,opacity .2s}
+.ob2-metal-button:hover:not(:disabled){transform:translateY(-1px)}.ob2-metal-button:active:not(:disabled){transform:scale(.97)}.ob2-metal-button:disabled{opacity:.35;cursor:default}
+.ob2-metal-art{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;pointer-events:none;z-index:0}.ob2-metal-art>span,.ob2-metal-art>div{width:100%!important;height:100%!important}.ob2-metal-art canvas{width:100%!important;height:100%!important}.ob2-metal-label{position:relative;z-index:2;background:radial-gradient(ellipse,#f6f6f6 35%,#efefefbd 65%,transparent 76%);padding:14px 13px;color:#292929}
+.ob2-vault{display:flex;flex-direction:column;align-items:center;justify-content:center;width:100%;max-width:344px;min-height:166px;border:1px dashed #ffffff30;border-radius:18px;background:#ffffff02;color:#ddd;cursor:pointer;padding:22px;margin:0 0 25px;transition:border-color .25s,background .25s,transform .25s}
+.ob2-vault:hover{border-color:#ffffff70;background:#ffffff05}.ob2-vault svg{width:60px;height:60px;margin-bottom:10px;stroke:#bfc8d1;stroke-width:1.25;overflow:visible}.ob2-folder-back{fill:#151a1e;transition:transform .3s}.ob2-folder-front{fill:#252c32;transform-origin:bottom;transition:transform .3s,fill .3s}.ob2-vault:hover .ob2-folder-front{transform:translateY(3px) skewX(-5deg);fill:#3d464e}.ob2-vault:hover .ob2-folder-back{transform:translateY(-3px)}
+.ob2-vault-name{font-size:14px;max-width:100%;overflow-wrap:anywhere}.ob2-vault-hint{font-size:11px;color:#747474;margin-top:8px}
+.oracle-onboarding-v2 .ob2-activation{width:min(340px,calc(100vw - 48px));padding:0;overflow:visible;border:1px solid #ffffff25;border-radius:16px;background:#111;color:#eee;box-shadow:0 20px 80px #0009}
+.ob2-activation::backdrop{background:#0007;backdrop-filter:blur(7px)}
+.ob2-beam{position:absolute;inset:-1px;pointer-events:none;border-radius:16px;z-index:0}.ob2-beam>div,.ob2-beam-effect,.ob2-beam-fill{width:100%;height:100%;border-radius:16px}.ob2-beam-fill{background:#101010}
+.ob2-status-body{position:relative;z-index:1;padding:24px;display:flex;flex-direction:column;gap:18px}
+.ob2-status-body h2,.ob2-status-body strong{margin:0;font-size:14px;font-weight:500;line-height:1.5}
+.ob2-status-body progress{appearance:none;-webkit-appearance:none;width:100%;height:3px;border:0;border-radius:4px;background:#ffffff16;overflow:hidden;accent-color:#dedede}
+.ob2-status-body progress::-webkit-progress-bar{background:#ffffff16;border-radius:4px}.ob2-status-body progress::-webkit-progress-value{background:linear-gradient(90deg,#808991,#f3f6fa);border-radius:4px;transition:width .45s ease}.ob2-status-body progress::-moz-progress-bar{background:#e3e8ed}
+.ob2-status-body progress:indeterminate{background:linear-gradient(90deg,transparent,#ddd 50%,transparent) 0 0/35% 100% no-repeat,#ffffff10;animation:ob2-progress 1.8s ease-in-out infinite}.ob2-status-body progress:indeterminate::-webkit-progress-bar{background:transparent}
+.ob2-installation{position:fixed;top:88px;left:50%;transform:translateX(-50%);width:min(380px,calc(100vw - 40px));border:1px solid #ffffff25;border-radius:16px;background:#101010;z-index:70;box-shadow:0 10px 40px #0008}.ob2-installation[hidden]{display:none}.ob2-installation .ob2-status-body{padding:19px 23px;gap:14px}.ob2-install-error{color:#ff8585;font-size:12px;margin:0}.ob2-retry{align-self:flex-start;padding:7px 12px;border:1px solid #ffffff35;border-radius:8px;color:#ddd;background:#191919}
+#toast[data-tone=error]{color:#ffb2b2;border-color:#b8383866;background:#270e0ef5}#toast[data-tone=error] .toast-icon{border-color:#fa7373;color:#fa7373}
+.ob2-shake{animation:ob2-shake .35s ease-in-out}@keyframes ob2-shake{20%,60%{transform:translateX(-6px)}40%,80%{transform:translateX(6px)}100%{transform:translateX(0)}}@keyframes ob2-progress{from{background-position:-55% 0}to{background-position:155% 0}}
+@media(max-height:650px){.ob2-content{padding:32px 0}.ob2-content .ob2-logo{width:210px;margin-bottom:24px}.ob2-vault{min-height:140px}.ob2-content h1{font-size:24px}}
+@media(prefers-reduced-motion:reduce){.oracle-onboarding-v2 *{animation:none!important;transition:none!important}.ob2-vault:hover path{transform:none}.ob2-status-body progress:indeterminate{background:#ffffff30}}
+body.reduced .oracle-onboarding-v2 *{animation:none!important;transition:none!important}
+
+.ob2-metal-art .metal-fx-content,.ob2-metal-art .metal-fx-content>div {width:100%!important;height:100%!important;border-radius:inherit!important}
+.ob2-metal-art .metal-fx-content>div>span {display:none!important}
+.ob2-metal-label {background:none;padding:0}
+.ob2-metal-button {border:0!important}
+
+.ob2-activation[open]::backdrop{animation:ob2-backdrop-in .24s ease both}
+.ob2-activation.ob2-closing::backdrop{animation:ob2-backdrop-out .18s ease both}
+@keyframes ob2-backdrop-in{from{background:#0000;backdrop-filter:blur(0)}to{background:#0007;backdrop-filter:blur(7px)}}
+@keyframes ob2-backdrop-out{from{background:#0007;backdrop-filter:blur(7px)}to{background:#0000;backdrop-filter:blur(0)}}
+
+/* Native dialogs can receive focus themselves; only controls need focus rings. */
+.ob2-screen:focus,.ob2-activation:focus,.ob2-activation:focus-visible {outline:none!important}
+.ob2-description {max-width:480px;width:100%}.ob2-description>span {display:block}
+.ob2-vault-selection {width:100%;max-width:400px;margin-bottom:25px}.ob2-vault-selection .ob2-vault {max-width:none;margin:0}
+.ob2-selected-vault {display:flex;align-items:center;gap:16px;text-align:left;padding:20px;border:1px solid #ffffff30;border-radius:16px;background:#ffffff04;min-height:105px;box-sizing:border-box}
+.ob2-selected-vault>svg {width:48px;height:48px;flex:none;stroke:#c2ccd5;stroke-width:1.3}
+.ob2-selected-vault>div {min-width:0;flex:1}.ob2-selected-vault strong {font-size:14px;font-weight:500;display:block;overflow-wrap:anywhere}
+.ob2-selected-vault span {font-size:11px;color:#909090;display:block;overflow-wrap:anywhere;margin-top:7px}
+.ob2-remove-vault {color:#ff7373;background:#ff535308;border:1px solid #ff535320;border-radius:10px;width:36px;height:36px;display:flex;align-items:center;justify-content:center;padding:8px;flex:none;cursor:pointer}
+.ob2-remove-vault:hover {background:#ff535318;border-color:#ff535350}.ob2-remove-vault svg {width:19px;height:19px}
+.ob2-installation {max-height:calc(100vh - 100px);overflow:hidden;overflow-wrap:anywhere}
+.ob2-installation.ob2-in-header {transform:translateX(-50%);max-height:calc(100vh - 24px)}
+.ob2-installation.ob2-in-header .ob2-status-body {padding:11px 20px;gap:8px}
+.ob2-installation.ob2-in-header .ob2-status-body strong {font-size:12px}
+@media(max-width:480px){.ob2-description>span{display:inline}.ob2-description>span+span:before{content:' '}}
+
+.ob2-integration{width:100%;text-align:left;margin:0 0 24px;font-size:13px;line-height:1.5;color:#ccc}
+.ob2-integration label{display:flex;align-items:flex-start;gap:10px;margin:14px 0}.ob2-integration input{flex:none;margin:3px 0;accent-color:#ddd}.ob2-integration select{margin-left:auto;background:#171717;color:#eee;border:1px solid #ffffff30;border-radius:6px;padding:2px 6px}.ob2-integration p{font-size:12px;color:#999;margin:18px 0 0}.ob2-integration :focus-visible{outline:2px solid #bfc8d1;outline-offset:3px}
+
+/* One button material throughout the onboarding, including recovery actions. */
+.ob2-vault-action{margin-top:18px}.ob2-vault-action .ob2-metal-button,.ob2-codex-actions .ob2-metal-button,.ob2-retry .ob2-metal-button{height:36px;min-width:0;font-size:13px!important;padding:0 16px!important}
+.ob2-vault{cursor:default}.ob2-vault-action{display:flex;justify-content:center}
+.ob2-destination{width:100%;margin:0 0 20px;color:#ccc;font-size:13px}.ob2-destination span{display:block;overflow-wrap:anywhere;color:#999;font-size:11px;margin-top:6px}
+.ob2-integration{border:1px solid #ffffff24;border-radius:16px;background:#ffffff03;padding:6px 18px 16px;box-sizing:border-box}
+.ob2-setting{display:flex;align-items:center;justify-content:space-between;gap:16px;padding:14px 0;border-bottom:1px solid #ffffff14}
+.ob2-integration .ob2-setting>label{flex:1;margin:0;align-items:center;gap:12px;cursor:pointer}
+.ob2-integration input{width:15px;height:15px;margin:0}.ob2-time{display:flex;align-items:center;gap:10px;flex:none}.ob2-integration .ob2-time>label{margin:0;font-size:11px;color:#999}.ob2-time .select-trigger{height:36px;min-width:85px;padding:0 12px}
+.ob2-integration .oracle-select{margin:0}.ob2-integration p{font-size:11px;line-height:1.6;margin:14px 0 0}
+.ob2-codex-actions{display:flex;flex-wrap:wrap;gap:8px}.ob2-codex-actions[hidden],.ob2-retry[hidden]{display:none}.ob2-retry{padding:0;border:0;background:none}.ob2-install-error.ob2-pending{color:#bbb;line-height:1.6}
+@media(max-width:480px){.ob2-setting{flex-wrap:wrap}.ob2-time{margin-left:27px}}
+
+.ob2-change-vault{flex:none;width:32px;height:32px;padding:6px;border:1px solid #ffffff24;border-radius:8px;background:#ffffff05;color:#bfc8d1;cursor:pointer}.ob2-change-vault svg{width:18px;height:18px}.ob2-change-vault:hover{background:#ffffff12}
+.ob2-codex-actions .ob2-small-button{font:inherit;font-size:12px;height:30px;padding:0 12px;border:1px solid #ffffff30;border-radius:8px;background:#ffffff09;color:#ddd;white-space:nowrap;cursor:pointer}.ob2-codex-actions .ob2-small-button:hover{background:#ffffff15}.ob2-integrating{max-height:calc(100vh - 24px)}
+
+/* Keep the beam inside the card; scrolling belongs only to long status text. */
+.ob2-installation .ob2-status-body{min-width:0;box-sizing:border-box;max-height:inherit;overflow:hidden}
+.ob2-installation .ob2-status-body>*{flex-shrink:0;min-width:0}
+.ob2-installation .ob2-install-error{flex-shrink:1;min-height:0;overflow:auto;scrollbar-width:none}
+.ob2-installation::-webkit-scrollbar,.ob2-installation .ob2-install-error::-webkit-scrollbar{display:none;width:0;height:0}

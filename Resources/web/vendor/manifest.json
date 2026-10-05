@@ -1,0 +1,7 @@
+{
+  "name": "marked",
+  "version": "18.0.6",
+  "origin": "https://github.com/markedjs/marked",
+  "sha256": "62ad5de5bea6d79b4c47e5c0b5cbe4be61e25ee8994595c2cc0969b2a144cc5d",
+  "usage": "Lexer only. Oracle renders a closed tag/attribute allowlist; source HTML and remote images are not enabled."
+}

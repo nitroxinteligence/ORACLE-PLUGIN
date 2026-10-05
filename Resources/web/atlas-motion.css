@@ -1,0 +1,96 @@
+/* Renderer-only overrides. No panel, modal, search or replay-control layout. */
+.oracle-core .core-word { display: none; }
+.three-enabled .category-node { animation: none; }
+.three-enabled .category-node .selection-ring { stroke-opacity: 0; }
+.three-enabled .category-node:focus-visible .selection-ring { stroke-opacity: .75; }
+.three-enabled .skill-node { animation: none; }
+.three-enabled .skill-selection { stroke-opacity: 0; }
+.three-enabled .skill-node:focus-visible .skill-selection { stroke-opacity: .9; }
+.category-node, .skill-node { transition: opacity 180ms ease; }
+.atlas-camera { will-change: auto; }
+.dragging .atlas-camera { will-change: transform; }
+.motion-reduced .category-node, .motion-reduced .skill-node,
+.motion-reduced .skill-name, .motion-reduced .selection-ring { transition: none; }
+.window-hidden .category-node, .window-hidden .skill-node,
+.ambient-paused .category-node, .ambient-paused .skill-node { animation-play-state: paused; }
+@media (prefers-reduced-motion: reduce) {
+  .category-node, .skill-node, .skill-name, .selection-ring { transition: none !important; }
+}
+
+/* Context navigation stays at screen scale while the galaxy moves beneath it. */
+.atlas-context{position:absolute;z-index:2;top:5px;left:50%;transform:translateX(-50%);display:flex;align-items:center;gap:6px;max-width:calc(100% - 20px);padding:5px;border:1px solid var(--line);border-radius:13px;background:var(--panel);backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);box-shadow:0 5px 22px #0003;font-size:11px;white-space:nowrap}
+.atlas-context[hidden],.atlas-page[hidden]{display:none}
+.atlas-context button{min-width:29px;height:28px;padding:0 8px;border-radius:8px;color:#b6b6b6}
+.atlas-context button:hover,.atlas-context button:focus-visible{background:#ffffff0c;color:white}
+.atlas-context button[aria-current]{color:#eee;pointer-events:none}
+.atlas-context button:disabled{opacity:.25}
+.atlas-breadcrumb{display:flex;align-items:center;min-width:0;overflow:hidden}
+.atlas-breadcrumb button{min-width:0;overflow:hidden;text-overflow:ellipsis}
+.atlas-breadcrumb button+button:before{content:'›';padding-right:12px;color:#656565}
+.atlas-page{display:flex;gap:2px;align-items:center;border-left:1px solid var(--line);padding-left:4px;font-variant-numeric:tabular-nums}
+.category-node,.skill-node,.atlas-group{cursor:pointer}
+#atlas .category-symbol{width:20px;height:20px}
+.category-node.subdued{opacity:.26}
+.atlas-group{outline:none;transition:opacity 240ms ease}
+.group-junction{fill:#111;stroke:var(--node-accent);stroke-width:1.15;vector-effect:non-scaling-stroke;transition:fill 180ms}
+.atlas-group.selected .group-junction,.atlas-group:hover .group-junction,.atlas-group:focus-visible .group-junction{fill:var(--node-accent);stroke:#fff}
+.group-name{fill:#c7c7c7;letter-spacing:.8px;pointer-events:none;opacity:0;transition:opacity 220ms}
+.atlas-group.member .group-name,.atlas-group:hover .group-name,.atlas-group:focus-visible .group-name{opacity:.85}
+.atlas-group.subdued{opacity:.19}
+.group-edge{stroke:var(--node-accent);stroke-width:.7;stroke-opacity:.36;vector-effect:non-scaling-stroke}
+.group-edge.subdued{stroke-opacity:.12}
+.three-enabled .group-edge{opacity:0}
+.skill-glyph{stroke:#dedede;stroke-width:.65;fill:none;opacity:0;pointer-events:none}
+#atlas[data-context="group"] .skill-glyph,#atlas[data-context="skill"] .skill-glyph{opacity:.86}
+#atlas[data-context="group"] .skill-dot,#atlas[data-context="skill"] .skill-dot{r:9;fill:#121416;stroke:var(--node-accent);stroke-width:.75}
+.skill-node.subdued{opacity:.18}
+.skill-edge{stroke-opacity:.25}
+.skill-node:focus-visible .skill-name,.skill-node:hover .skill-name{paint-order:stroke;stroke:#0a0a0a;stroke-width:4px;stroke-linejoin:round}
+.motion-reduced .atlas-group,.motion-reduced .group-name,.motion-reduced .group-junction{transition:none}
+@media(prefers-reduced-motion:reduce){.atlas-group,.group-name,.group-junction{transition:none}}
+
+.skill-node{opacity:var(--leaf-life,1)}
+.skill-node.subdued{opacity:calc(var(--leaf-life,1) * .18)}
+
+.routing-edge{stroke:var(--node-accent);stroke-width:.65;fill:none;vector-effect:non-scaling-stroke;pointer-events:none}
+
+body.reduce-transparency .atlas-context{background:#1c1c1c;backdrop-filter:none;-webkit-backdrop-filter:none}
+
+/* Dedicated specialist scenes retain the same edge-to-edge universe. */
+#atlas:not([data-context="global"]) .category-edge,#atlas:not([data-context="global"]) .edge-flow{display:none}
+#atlas.scene-travelling .atlas-scene{pointer-events:none}
+#atlas:not([data-context="global"]) .category-name{display:block;opacity:1;fill:#eee}
+
+/* Real personal/professional folders and notes surround the plugin orbit. */
+.knowledge-orbit-layer{pointer-events:none}
+.knowledge-orbit-ring{fill:none;stroke:#ffffff;stroke-opacity:.12;stroke-width:.7;vector-effect:non-scaling-stroke}
+.knowledge-orbit-node{pointer-events:auto;cursor:pointer;outline:none}
+.knowledge-orbit-dot{stroke:#ffffff55;stroke-width:.6;vector-effect:non-scaling-stroke}
+.knowledge-orbit-node:hover .knowledge-orbit-dot,.knowledge-orbit-node:focus-visible .knowledge-orbit-dot{stroke:#fff;stroke-width:1.8}
+.three-enabled .knowledge-node .skill-dot{opacity:1;stroke:#ffffff66;stroke-width:.8;vector-effect:non-scaling-stroke}
+.knowledge-node .skill-glyph{opacity:.9;stroke:#fff;stroke-width:.8}
+.knowledge-node:hover .skill-dot,.knowledge-node:focus-visible .skill-dot{stroke:#fff;stroke-width:1.5}
+.knowledge-empty{position:absolute;left:var(--atlas-center-x,50%);top:calc(50% + 80px);transform:translateX(-50%);max-width:280px;text-align:center;color:var(--muted);font-size:12px;pointer-events:none}
+.plugin-fallback svg{color:#fff;width:22px;height:22px}
+
+/* Specialist names are headings in screen space, not tooltip bubbles. */
+.specialist-hover-name{position:absolute;z-index:2;margin:0;transform:translateX(-50%);pointer-events:none;color:#f2f2f2;font-size:20px;font-weight:500;line-height:1.25;letter-spacing:-.3px;text-align:center;overflow-wrap:anywhere;text-shadow:0 2px 12px #0008}
+.category-node.specialist-name-active .category-name{visibility:hidden}
+
+#atlas .category-node,#atlas .atlas-group,#atlas .skill-node{transition:opacity 200ms ease,filter 200ms ease}
+#atlas .hover-muted{opacity:.4;filter:blur(1.25px)}
+#atlas .hover-focused{filter:none}
+#atlas .atlas-group.hover-focused .group-name{opacity:.9}
+#atlas .plugin-orbit-layer,#atlas .knowledge-orbit-layer,#atlas .verified-connectors{transition:opacity 200ms ease,filter 200ms ease}
+#atlas.specialist-spotlight .plugin-orbit-layer,#atlas.specialist-spotlight .knowledge-orbit-layer,#atlas.specialist-spotlight .verified-connectors{opacity:.4;filter:blur(1px)}
+
+/* Quiet, noninteractive atmosphere. Negative layers stay above the body background
+   inside their isolated app/stage, but behind all graph objects and floating panels. */
+#app{isolation:isolate}
+#app>.oracle-starfield{position:fixed;inset:0;width:100%;height:100%;z-index:-1;pointer-events:none;overflow:hidden;fill:#dce2e9}
+#atlas>.atlas-expansion{position:absolute;inset:0;width:100%;height:100%;z-index:-1;overflow:hidden;pointer-events:none;transition:opacity 200ms ease}
+.atlas-expansion circle{fill:none;stroke:#dce2e9;stroke-width:.6;vector-effect:non-scaling-stroke}
+#atlas:not([data-context="global"])>.atlas-expansion{display:none}
+#atlas.specialist-spotlight>.atlas-expansion{opacity:.4}
+.motion-reduced>.atlas-expansion{transition:none}
+@media(prefers-reduced-motion:reduce){#atlas>.atlas-expansion{transition:none}}

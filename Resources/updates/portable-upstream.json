@@ -1,0 +1,83 @@
+{
+  "aiMemory": {
+    "commit": "7580b74d0fb9d14a6d949dc92f5ea8bb7feb3c83",
+    "darwin-arm64": {
+      "archiveBytes": 15112158,
+      "archiveSHA256": "160881fab2be3d2e9cf64f656da517c961c1e14ff4987d75a70ee1c71e17e9ef",
+      "bytes": 33923568,
+      "certificateBytes": 0,
+      "licenseSHA256": "18332c61780ce8e694d4fa330770cd4d8c85e33f47ac13a80d72d70bb032ae72",
+      "member": "ai-memory",
+      "sha256": "cf4d063a64ff5f95140e14cbb59de997f8af92975df29d43173eb1efbd7c2e69",
+      "url": "https://github.com/akitaonrails/ai-memory/releases/download/v2.5.2/ai-memory-macos-aarch64.tar.gz"
+    },
+    "hooks": {
+      "archiveBytes": 31836,
+      "archiveSHA256": "c31dc3e4e75d00dc5cb32760c2334bf42baefbca495279ab2b4578ee487b26bb",
+      "manifestSHA256": "6eb3e52f9c8a9d4447035c3b9e50db9902560bc351763a226a5b9a309f5ed154",
+      "url": "https://github.com/akitaonrails/ai-memory/releases/download/v2.5.2/ai-memory-hooks.tar.gz"
+    },
+    "repository": "akitaonrails/ai-memory",
+    "schemaSHA256": "668095c838f9bb259e4156f6d4b69c7347fc63363f439fee67964deca3a3425d",
+    "version": "2.5.2",
+    "win32-x64": {
+      "archiveBytes": 18609685,
+      "archiveSHA256": "7bc4dab235feb7a26496338feb756515bf6e47ef5f0eaa4fe0e5dcaabead32d3",
+      "bytes": 48761344,
+      "certificateBytes": 0,
+      "licenseSHA256": "cd901acf1da72afc3e6690554a9867b8a63c31d5b87b692959278c0b3434d706",
+      "member": "ai-memory.exe",
+      "sha256": "bf0e71131b1bf26b856492c58bff51ea26a4b71ccfd55731711c21ffc5710a5e",
+      "url": "https://github.com/akitaonrails/ai-memory/releases/download/v2.5.2/ai-memory-windows-x86_64.zip"
+    }
+  },
+  "aiMemoryHistory": [
+    {
+      "binarySHA256": "99a3c230d7de4b6a494bed505505cc62cbb4e3bd1ad02b9e650374d1b6519f2e",
+      "schemaSHA256": "52dca8dc76f218758ca9dc1224e72801f0f62f82f44404a2b6f89807e0111098",
+      "version": "2.4.2"
+    }
+  ],
+  "bun": {
+    "darwin-arm64": {
+      "archiveBytes": 25377591,
+      "archiveSHA256": "90987a3a16d7db556d886ac3d551e7b6d3edf0a1cf43acaed622e8676be1d12f",
+      "bytes": 61884464,
+      "member": "bun-darwin-aarch64/bun",
+      "sha256": "35d20dd0263e5c950194434b925454fdfa9ba6e4467da960410fa05b08a7a5b5",
+      "url": "https://github.com/oven-sh/bun/releases/download/bun-v1.4.2/bun-darwin-aarch64.zip"
+    },
+    "version": "1.4.2",
+    "win32-x64": {
+      "archiveBytes": 39807490,
+      "archiveSHA256": "78c221c2376f79731ccf4e4af0b3bb46d81fefa3296c5abee09ad8a1b21e68c6",
+      "bytes": 86096984,
+      "certificateBytes": 10328,
+      "member": "bun-windows-x64-baseline/bun.exe",
+      "sha256": "15277c59ccd6c6c20f8dc9716c2b59c1776320d606b6a8658f70be8799519ca4",
+      "url": "https://github.com/oven-sh/bun/releases/download/bun-v1.4.2/bun-windows-x64-baseline.zip"
+    }
+  },
+  "gbrain": {
+    "commit": "8c9a8e9a480c388cf7a87dc0c48dd0d56e6c4bb3",
+    "methodManifestSHA256": "755793498811fb31296acc14c9cd8766cabd04cb1d3598d94e42106842b5f2bc",
+    "native": {
+      "darwin-arm64": {
+        "bytes": 70512,
+        "path": "engine-source/vendor/gbrain/native/locks/prebuilds/darwin-arm64.node",
+        "sha256": "1caa3889223ef912a190fea43891d402b7c75d134415bb1ba8de0a9b791e0833"
+      },
+      "win32-x64": {
+        "bytes": 35328,
+        "path": "engine-source/vendor/gbrain/native/locks/prebuilds/win32-x64.node",
+        "sha256": "04e8bea13fe224cb12d6f71fefc67390be1777eb64cd5d129daf54b2872d53ff"
+      }
+    },
+    "repository": "garrytan/gbrain",
+    "version": "0.60.65.0"
+  },
+  "gbrainHistory": [
+    "2efaaf8f8a817b5b82e023383618fdcdb1cc5f7d"
+  ],
+  "schemaVersion": 1
+}

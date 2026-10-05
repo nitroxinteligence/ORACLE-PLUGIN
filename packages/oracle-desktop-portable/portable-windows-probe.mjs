@@ -1,0 +1,36 @@
+import {promisify} from 'node:util';
+import {execFile} from 'node:child_process';
+import {readFile,lstat,realpath,mkdtemp,mkdir,rm} from 'node:fs/promises';
+import {createHash} from 'node:crypto';
+import {join,dirname,win32} from 'node:path';
+import {fileURLToPath} from 'node:url';
+import {windowsLocalPath} from './portable-windows-paths.mjs';
+import {WINDOWS_RUNTIME_PINS} from './portable-windows-runtime-pins.mjs';
+const exec=promisify(execFile),sha=bytes=>createHash('sha256').update(bytes).digest('hex');
+const fail=code=>{throw Object.assign(new Error(code),{code});};
+export function inspectPinnedWindowsPE(bytes,pin){if(!(bytes instanceof Uint8Array)||bytes.length!==pin.bytes||sha(bytes)!==pin.sha256)fail('windows_runtime_pin_mismatch');const data=Buffer.from(bytes),pe=data.readUInt32LE(0x3c);if(data.toString('ascii',0,2)!=='MZ'||pe+264>data.length||data.toString('ascii',pe,pe+4)!=='PE\0\0'||data.readUInt16LE(pe+4)!==0x8664||data.readUInt16LE(pe+24)!==0x20b)fail('windows_runtime_pe_mismatch');const offset=data.readUInt32LE(pe+24+112+32),length=data.readUInt32LE(pe+24+112+36);if(length!==pin.certificateTableBytes||length&&(offset%8||offset+length>data.length))fail('windows_runtime_pe_mismatch');return Object.freeze({version:pin.version,sha256:pin.sha256,bytes:pin.bytes,machine:'x86_64',certificateTableBytes:length,certificatePresent:length>0,authenticodeVerified:false,executionVerified:false});}
+export function windowsProbeEnvironment({scratch,systemDirectory}){scratch=windowsLocalPath(scratch);systemDirectory=windowsLocalPath(systemDirectory);return Object.freeze({SYSTEMROOT:win32.dirname(systemDirectory),WINDIR:win32.dirname(systemDirectory),PATH:systemDirectory,HOME:scratch,USERPROFILE:scratch,LOCALAPPDATA:win32.join(scratch,'Local'),APPDATA:win32.join(scratch,'Roaming'),TEMP:scratch,TMP:scratch,AI_MEMORY_DATA_DIR:win32.join(scratch,'ai-memory-unused'),BUN_CONFIG_NO_CLEAR_TERMINAL:'1',DO_NOT_TRACK:'1',AI_MEMORY_CAPTURE_ASSISTANT:'false',AI_MEMORY_ENABLE_WEB:'false',AI_MEMORY_EMBEDDING_PROVIDER:'none',AI_MEMORY_LLM_PROVIDER:'',AI_MEMORY_LLM_FALLBACKS:'[]',AI_MEMORY_LLM_API_KEY:'',AI_MEMORY_EMBEDDING_API_KEY:'',AI_MEMORY_AUTH_TOKEN:'',OPENAI_API_KEY:'',ANTHROPIC_API_KEY:'',GOOGLE_API_KEY:'',GEMINI_API_KEY:'',VOYAGE_API_KEY:'',COHERE_API_KEY:''});}
+/** Fixed --version only. No runtime setup, service, DB, vault, hook or account.
+ * Host Windows execution is independent of PE/hash inspection and cannot be
+ * inferred from this source or Macintosh/mock checks. */
+export async function runWindowsRuntimeProbe({root,dataDir,systemDirectory,signal,platform=process.platform,architecture=process.arch,execute=exec}={}){
+ if(platform!=='win32'||architecture!=='x64')fail('windows_host_required');root=windowsLocalPath(root);dataDir=windowsLocalPath(dataDir);systemDirectory=windowsLocalPath(systemDirectory);
+ const canonical=async path=>{if((await lstat(path)).isSymbolicLink()||await realpath(path)!==path)fail('windows_probe_path_invalid');};await canonical(root);await canonical(dataDir);
+ if(dataDir===root||dataDir.startsWith(root+'\\'))fail('windows_probe_profile_overlap');if(signal?.aborted)fail('operation_cancelled');
+ const binaries=[{name:'bun',pin:WINDOWS_RUNTIME_PINS.bun,path:join(root,'runtime','bun.exe')},{name:'ai-memory',pin:WINDOWS_RUNTIME_PINS.aiMemory,path:join(root,'runtime','ai-memory.exe')}],metadata=[];
+ for(const entry of binaries){await canonical(entry.path);metadata.push(inspectPinnedWindowsPE(await readFile(entry.path),entry.pin));}
+ const scratch=await mkdtemp(join(dataDir,'oracle-windows-version-'));const results=[];
+ try{await canonical(scratch);const env=windowsProbeEnvironment({scratch,systemDirectory});for(let i=0;i<binaries.length;i++){if(signal?.aborted)fail('operation_cancelled');await canonical(dataDir);await canonical(binaries[i].path);inspectPinnedWindowsPE(await readFile(binaries[i].path),binaries[i].pin);let result;try{result=await execute(binaries[i].path,['--version'],{cwd:scratch,env,signal,timeout:5000,maxBuffer:16384,encoding:'utf8',windowsHide:true,shell:false});}catch(error){results.push({name:binaries[i].name,...metadata[i],executionVerified:false,errorCode:String(error.code??'process_failed').slice(0,64),dependencyAdmissionVerified:false});continue;}inspectPinnedWindowsPE(await readFile(binaries[i].path),binaries[i].pin);const output=result.stdout.trim(),expected=i===0?'1.3.10':'ai-memory 2.4.2';results.push({name:binaries[i].name,...metadata[i],observedVersion:output===expected?output:null,executionVerified:output===expected,dependencyAdmissionVerified:false});}return Object.freeze({scope:'Windows vendor runtime --version only',platform,architecture,runtimes:results,hostQualified:false,ready:false,serviceAvailable:false,networkIsolationVerified:false,privateACLVerified:false,personalProfileUsed:false,vaultAccessed:false,hooksTrusted:false,captureEnabled:false});}finally{await rm(scratch,{recursive:true,force:true});}
+}
+async function main(){
+ const root=dirname(fileURLToPath(import.meta.url)),dataDir=process.env.ORACLE_WINDOWS_PROBE_PLUGIN_DATA;
+ if(!dataDir)fail('plugin_data_required');const name='oracle_windows_runtime_probe';let pending='',queue=Promise.resolve();
+ const send=value=>process.stdout.write(JSON.stringify(value)+'\n');
+ const handle=async request=>{if(request.id===undefined)return;try{let result;if(request.method==='initialize')result={protocolVersion:'2024-11-05',capabilities:{tools:{}},serverInfo:{name:'oracle-windows-runtime-probe',version:'0.1.0'}};
+ else if(request.method==='tools/list')result={tools:[{name,description:'Prova Windows x64 do --version de Bun e AI Memory oficiais. Sem vault/config pessoal ou serviço. Não qualifica o Oracle completo.',inputSchema:{type:'object',properties:{},additionalProperties:false}}]};
+ else if(request.method==='resources/list')result={resources:[]};
+ else if(request.method==='tools/call'&&request.params?.name===name&&(request.params.arguments===undefined||request.params.arguments!==null&&typeof request.params.arguments==='object'&&!Array.isArray(request.params.arguments)&&Object.keys(request.params.arguments).length===0)){const systemDirectory=join(process.env.SYSTEMROOT??'', 'System32');const proof=await runWindowsRuntimeProbe({root,dataDir,systemDirectory});result={content:[{type:'text',text:JSON.stringify(proof)}],structuredContent:proof};}
+ else throw Object.assign(new Error('unsupported_probe_method'),{code:'unsupported_probe_method'});send({jsonrpc:'2.0',id:request.id,result});}catch(error){send({jsonrpc:'2.0',id:request.id,result:{isError:true,content:[{type:'text',text:String(error.code??'probe_failed')} ]}});}};
+ process.stdin.setEncoding('utf8');process.stdin.on('data',chunk=>{pending+=chunk;if(Buffer.byteLength(pending)>1000000){process.exitCode=1;process.stdin.destroy();return;}for(;;){const index=pending.indexOf('\n');if(index<0)break;const line=pending.slice(0,index);pending=pending.slice(index+1);let request;try{request=JSON.parse(line);}catch{send({jsonrpc:'2.0',id:null,error:{code:-32700,message:'Parse error'}});continue;}queue=queue.then(()=>handle(request)).catch(()=>{});}});
+}
+if(process.argv[1]===fileURLToPath(import.meta.url))main().catch(error=>{process.stderr.write(String(error.code??'probe_failed')+'\n');process.exitCode=1;});

@@ -1,0 +1,126 @@
+{
+  "schema_version": 1,
+  "fallback_department": "department/other",
+  "departments": [
+    {
+      "id": "department/code",
+      "name": "Código",
+      "icon": "code",
+      "color": "#91b5ed",
+      "collection_ids": [
+        "code",
+        "cyber-security",
+        "cybersecurity",
+        "frontend-design",
+        "impeccable",
+        "frontend",
+        "richard-design"
+      ],
+      "aliases": [
+        "Código",
+        "Cybersecurity",
+        "Cyber Security",
+        "Frontend Design",
+        "Impeccable",
+        "Frontend",
+        "Richard Design"
+      ]
+    },
+    {
+      "id": "department/conversao",
+      "name": "Conversão",
+      "icon": "chart",
+      "color": "#bf96dd",
+      "collection_ids": [],
+      "aliases": []
+    },
+    {
+      "id": "department/entrega",
+      "name": "Entrega",
+      "icon": "folder",
+      "color": "#dba17c",
+      "collection_ids": [],
+      "aliases": []
+    },
+    {
+      "id": "department/leads",
+      "name": "Leads",
+      "icon": "search",
+      "color": "#a8a1eb",
+      "collection_ids": [],
+      "aliases": []
+    },
+    {
+      "id": "department/marketing",
+      "name": "Marketing",
+      "icon": "chart",
+      "color": "#92c399",
+      "collection_ids": [
+        "ads",
+        "marketing",
+        "personal-branding"
+      ],
+      "aliases": [
+        "Ads",
+        "Marketing",
+        "Personal Branding"
+      ]
+    },
+    {
+      "id": "department/oferta",
+      "name": "Oferta",
+      "icon": "note",
+      "color": "#d9c276",
+      "collection_ids": [],
+      "aliases": []
+    },
+    {
+      "id": "department/sistemas",
+      "name": "Sistemas",
+      "icon": "tool",
+      "color": "#92c399",
+      "collection_ids": [],
+      "aliases": []
+    },
+    {
+      "id": "department/trafego",
+      "name": "Tráfego",
+      "icon": "chart",
+      "color": "#91b5ed",
+      "collection_ids": [],
+      "aliases": []
+    },
+    {
+      "id": "department/sales",
+      "name": "Vendas",
+      "icon": "search",
+      "color": "#d9c276",
+      "collection_ids": [
+        "customer-finder"
+      ],
+      "aliases": [
+        "Customer Finder"
+      ]
+    },
+    {
+      "id": "department/content",
+      "name": "Conteúdo",
+      "icon": "note",
+      "color": "#7bc8b4",
+      "collection_ids": [
+        "contents"
+      ],
+      "aliases": [
+        "Contents"
+      ]
+    },
+    {
+      "id": "department/other",
+      "name": "Outros especialistas",
+      "icon": "tool",
+      "color": "#a6adb8",
+      "collection_ids": [],
+      "aliases": []
+    }
+  ]
+}

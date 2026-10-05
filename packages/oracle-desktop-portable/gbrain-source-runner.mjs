@@ -5,8 +5,8 @@ import { lstatSync, readFileSync, realpathSync } from 'node:fs';
 import { isAbsolute, join, resolve } from 'node:path';
 import {gbrainPrivateEnvironment,pathsOverlap} from './platform-process-environment.mjs';
 
-export const GBRAIN_SOURCE_PIN = "8c9a8e9a480c388cf7a87dc0c48dd0d56e6c4bb3";
-export const GBRAIN_SOURCE_VERSION = "0.60.65.0";
+export const GBRAIN_SOURCE_PIN = "c9ba778235fb2da921acd22dc3f92527f5072258";
+export const GBRAIN_SOURCE_VERSION = "0.60.68.0";
 const admittedRuntimes = new Map();
 const identityKey = stat => [stat.dev,stat.ino,stat.size,stat.mtimeMs,stat.ctimeMs].join(':');
 const sha = bytes => createHash('sha256').update(bytes).digest('hex');

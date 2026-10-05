@@ -1,0 +1,12 @@
+{
+  "$schema": "https://agent-plugins.org/schemas/1.0.0/mcp.schema.json",
+  "mcpServers": {
+    "oracle-portable-experimental": {
+      "type": "stdio",
+      "command": "./scripts/launch-mcp.sh",
+      "args": [],
+      "cwd": "./",
+      "env": {"ORACLE_PORTABLE_PLUGIN_DATA": "${PLUGIN_DATA}"}
+    }
+  }
+}

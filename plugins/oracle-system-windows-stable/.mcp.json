@@ -1,0 +1,25 @@
+{
+  "$schema": "https://agent-plugins.org/schemas/1.0.0/mcp.schema.json",
+  "mcpServers": {
+    "oracle-system-windows-stable": {
+      "type": "stdio",
+      "command": "powershell.exe",
+      "args": [
+        "-NoLogo",
+        "-NoProfile",
+        "-NonInteractive",
+        "-Command",
+        "$ErrorActionPreference='Stop';try{$p=[IO.Path]::Combine($env:ORACLE_PORTABLE_PLUGIN_ROOT,'scripts','launch-windows-runtime.ps1');$s=[IO.File]::ReadAllBytes($p);$h=[Security.Cryptography.SHA256]::Create();$v=([BitConverter]::ToString($h.ComputeHash($s))).Replace('-','').ToLowerInvariant();$h.Dispose();if($v -ne 'eac1d9a3aacc9a56caba77cfd7893020cd830218a618922d37d7b50ef4afbd99'){throw 'Oracle launcher checksum mismatch'};& ([scriptblock]::Create([Text.Encoding]::UTF8.GetString($s)))}catch{[Console]::Error.WriteLine('Oracle runtime startup failed: '+$_.Exception.Message);exit 1}"
+      ],
+      "cwd": "${PLUGIN_ROOT}",
+      "env": {
+        "ORACLE_PORTABLE_PLUGIN_ROOT": "${PLUGIN_ROOT}",
+        "ORACLE_PORTABLE_PLUGIN_DATA": "${PLUGIN_DATA}",
+        "ORACLE_WINDOWS_RUNTIME_SHA256": "15277c59ccd6c6c20f8dc9716c2b59c1776320d606b6a8658f70be8799519ca4",
+        "ORACLE_WINDOWS_ARCHIVE_SHA256": "42af1435e215c13a6e4ca8bb4d18f6381b84ca9d45615b1928e51eb927677450",
+        "ORACLE_WINDOWS_ARCHIVE_BYTES": "39676709",
+        "ORACLE_WINDOWS_RUNTIME_BYTES": "86096984"
+      }
+    }
+  }
+}

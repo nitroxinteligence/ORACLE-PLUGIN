@@ -1,0 +1,22 @@
+{
+  "name": "oracle-system",
+  "interface": {
+    "displayName": "Oracle System"
+  },
+  "plugins": [
+    {
+      "name": "oracle-system-mac-stable",
+      "source": {
+        "source": "local",
+        "path": "./plugins/oracle-system-mac-stable"
+      }
+    },
+    {
+      "name": "oracle-system-windows-stable",
+      "source": {
+        "source": "local",
+        "path": "./plugins/oracle-system-windows-stable"
+      }
+    }
+  ]
+}

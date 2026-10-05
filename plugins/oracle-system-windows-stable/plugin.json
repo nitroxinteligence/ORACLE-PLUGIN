@@ -1,0 +1,30 @@
+{
+  "$schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
+  "name": "oracle-system-windows-stable",
+  "version": "0.1.19",
+  "description": "Sistema de trabalho com inteligência artificial e conhecimento local do Obsidian, com interface Oracle.",
+  "author": {
+    "name": "Mateus M"
+  },
+  "extensions": {
+    "com.openai": {
+      "interface": {
+        "displayName": "Oracle System",
+        "shortDescription": "Conhecimento local com IA",
+        "longDescription": "Oracle para Windows x64, com interface visual, edição de notas originais, método GBrain e configuração do Second Brain. O acesso e as conexões mantêm seus consentimentos próprios.",
+        "developerName": "Mateus M",
+        "category": "Productivity",
+        "capabilities": [
+          "Interactive",
+          "Read",
+          "Write"
+        ],
+        "logo": "./assets/icon-mono.png",
+        "composerIcon": "./assets/icon-mono.png",
+        "brandColor": "#101113",
+        "logoDark": "./assets/icon-mono.png",
+        "composerIconDark": "./assets/icon-mono.png"
+      }
+    }
+  }
+}

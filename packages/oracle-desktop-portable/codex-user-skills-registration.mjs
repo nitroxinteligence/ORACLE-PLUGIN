@@ -1,6 +1,6 @@
 import fs from 'node:fs/promises';
 import {constants} from 'node:fs';
-import {join,dirname,resolve} from 'node:path';
+import {join,dirname,resolve,relative,sep} from 'node:path';
 import {homedir} from 'node:os';
 import {assertSkillsRelease,verifySkillsFile} from './skills-release-admission.mjs';
 
@@ -27,7 +27,7 @@ export function createCodexUserSkillsRegistration({policy,vault,userHome=homedir
    guard();return identity(info);
   }
   const root=selected.root,rootIdentity=await directory(root),homeIdentity=await directory(userHome);
-  const sourceDirectory=async path=>{await directory(root,rootIdentity);let cursor=root;for(const part of path.slice(root.length+1).split('/')){cursor=join(cursor,part);await directory(cursor);}guard();};
+  const sourceDirectory=async path=>{await directory(root,rootIdentity);let cursor=root;for(const part of relative(root,path).split(sep).filter(Boolean)){cursor=join(cursor,part);await directory(cursor);}guard();};
   async function read(path){
    await sourceDirectory(dirname(path));guard();const before=await fs.lstat(path);
    if(!before.isFile()||before.isSymbolicLink()||before.nlink!==1||before.size>32000000)fail('codex_skills_source_changed','Arquivo irregular na skill instalada.');
@@ -41,7 +41,7 @@ export function createCodexUserSkillsRegistration({policy,vault,userHome=homedir
    if(preservedPaths.some(path=>files.some(row=>row.path===path)||item.requiredFiles.includes(path))){skipped.push(item.hostName);continue;}
    const required=new Set([...files.map(row=>row.path),...item.requiredFiles]);
    for(const path of required)verifySkillsFile(admitted,path,await read(join(root,path)));
-   rows.push({name:item.hostName,source:join(root,folder),entry:join(root,item.entry),link:join(destination,item.hostName),required});
+   rows.push({name:item.hostName,source:join(root,folder),entry:join(root,item.entry),entryPath:item.entry,link:join(destination,item.hostName),required});
   }
   const parents=new Map([[userHome,homeIdentity]]);
   for(const part of ['.agents','skills']){
@@ -61,7 +61,7 @@ export function createCodexUserSkillsRegistration({policy,vault,userHome=homedir
     for(const path of row.required)verifySkillsFile(admitted,path,await read(join(root,path)));
     if(!await existing(row)){await fs.symlink(row.source,row.link,platform==='win32'?'junction':'dir');created.push(row);}
     await targetGuard();if(!await existing(row)||await fs.realpath(join(row.link,'SKILL.md'))!==row.entry)fail('codex_skills_registration_changed','A leitura do registro da skill divergiu.');
-    verifySkillsFile(admitted,row.entry.slice(root.length+1),await read(row.entry));
+    verifySkillsFile(admitted,row.entryPath,await read(row.entry));
    }
    guard();return Object.freeze({registered:rows.length,created:created.length,skippedPreserved:skipped.length,complete:skipped.length===0,destination,releaseID:admitted.releaseID,requiredPaths:Object.freeze(rows.map(row=>row.entry)),registrationVerified:true,discoveryVerified:false,modelExecutionVerified:false});
   }catch(error){

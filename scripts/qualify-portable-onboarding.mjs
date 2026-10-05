@@ -13,6 +13,9 @@ const base=join(work,'portable-onboarding-qualification');await fs.mkdir(base,{r
 const scratch=await fs.mkdtemp(join(base,'synthetic-')),vault=join(scratch,'vault'),data=join(scratch,'private'),userHome=join(scratch,'user');
 await fs.mkdir(vault,{mode:0o700});await fs.mkdir(data,{mode:0o700});
 await fs.mkdir(userHome,{mode:0o700});
+const legacyWorkspace=join(data,'codex-workspaces',createHash('sha256').update(vault).digest('hex'));
+const legacyAgents=Buffer.from('# Oracle System workspace\nPlano assinado: '+ 'a'.repeat(64)+'\n');
+await fs.mkdir(legacyWorkspace,{recursive:true,mode:0o700});await fs.writeFile(join(legacyWorkspace,'AGENTS.md'),legacyAgents,{mode:0o600});
 const metadata='SISTEMA/skills/codigo/frontend/impeccable/agents/openai.yaml';
 const original=Buffer.from('interface:\n  display_name: Impeccable\n  short_description: Use when the user wants to design, redesign, shape, critique, audit, polish, clarify,...\n  default_prompt: Use Impeccable to redesign, critique, audit, or polish this frontend.');
 await fs.mkdir(dirname(join(vault,metadata)),{recursive:true});await fs.writeFile(join(vault,metadata),original);
@@ -34,12 +37,13 @@ try{
  const backup=join(data,'readable-metadata-backups',createHash('sha256').update(original).digest('hex')+'.yaml');
  if(!(await fs.readFile(backup)).equals(original)||!(await fs.readFile(join(vault,metadata),'utf8')).includes('Oracle Frontend Impeccable'))throw Error('Reviewed metadata migration or original backup failed');
  if(await fs.readFile(join(vault,'PESSOAL/original.md'),'utf8')!=='# Synthetic personal note\nKeep this original.\n')throw Error('Personal fixture changed');
+ if(!(await fs.readFile(join(legacyWorkspace,'AGENTS.md'))).equals(legacyAgents))throw Error('Previous Codex workspace changed');
  const {admitSkillsRelease}=await import(pathToFileURL(join(root,'skills-release-admission.mjs')));
  const trust=JSON.parse(await fs.readFile(join(root,'resources/updates/distribution-keys.json'),'utf8'));
  const skills=admitSkillsRelease(await fs.readFile(join(root,'engine-source/provenance/oracle-distribution.json')),{trust});
  const destination=join(userHome,'.agents/skills'),names=await fs.readdir(destination);
  if(!skills.items.length||names.length!==skills.items.length)throw Error('Packaged installer did not register the complete signed skills catalog');
  for(const item of skills.items){if(!names.includes(item.hostName)||await fs.realpath(join(destination,item.hostName,'SKILL.md'))!==join(vault,item.entry))throw Error('Registered skill readback diverged');}
- const report={passed:true,scope:'Actual packaged local installation with previous public skill metadata',signedCorpus:true,realGBrainIndex:true,realAIMemoryRuntime:true,metadataUpdated:true,originalBackupVerified:true,personalFixturePreserved:true,registeredSkills:skills.items.length,registrationVerified:true,codexDiscoveryVerified:false,userHome,vault,installationCompleted:state.installationCompleted,syntheticLicense:true,syntheticFolderSelection:true,personalProfileUsed:false,hooksRequested:false,codexConnectionRequested:false,maintenanceRequested:false};
+ const report={passed:true,scope:'Actual packaged local installation with previous public skill metadata and legacy Codex workspace',signedCorpus:true,realGBrainIndex:true,realAIMemoryRuntime:true,metadataUpdated:true,originalBackupVerified:true,personalFixturePreserved:true,legacyCodexWorkspacePreserved:true,registeredSkills:skills.items.length,registrationVerified:true,codexDiscoveryVerified:false,userHome,vault,installationCompleted:state.installationCompleted,syntheticLicense:true,syntheticFolderSelection:true,personalProfileUsed:false,hooksRequested:false,codexConnectionRequested:false,maintenanceRequested:false};
  await fs.writeFile(join(scratch,'report.json'),JSON.stringify(report,null,2)+'\n');process.stdout.write(JSON.stringify({report:join(scratch,'report.json'),...report})+'\n');
 }finally{clearInterval(monitor);clearTimeout(deadline);await service.close();}

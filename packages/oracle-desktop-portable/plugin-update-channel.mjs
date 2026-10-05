@@ -23,6 +23,14 @@ export function createPluginUpdateChannel({bundleRoot,hostPackageRoot,policy,pro
  const trust=loadReviewedContentTrust(join(bundleRoot,'resources'));let latest;
  const check=context=>{policy.assertAdmission(context.ticket);if(context.signal?.aborted)fail('operation_cancelled','Atualização cancelada.');};
  async function cli(args,context){check(context);if(runCLI)return runCLI(args,context);const host=discoverHost();if(!host.available)fail('plugin_host_unavailable','Use o gerenciador de plugins do ChatGPT/Codex para esta atualização.');const result=await execute(host.executablePath,['plugin',...args],{cwd:bundleRoot,env:{PATH:process.env.PATH||'/usr/bin:/bin',HOME:home,CODEX_HOME:codexHome,LANG:'en_US.UTF-8',GIT_CONFIG_NOSYSTEM:'1',GIT_CONFIG_GLOBAL:'/dev/null',GIT_TERMINAL_PROMPT:'0'},signal:context.signal,timeout:300000,maxBuffer:2000000,windowsHide:true,shell:false});check(context);const after=discoverHost();if(!after.available||after.binarySHA256!==host.binarySHA256)fail('plugin_host_changed','O executável do host mudou.');return JSON.parse(result.stdout);}
+ async function marketplace(context){
+  const marketplaces=await cli(['marketplace','list','--json'],context),market=marketplaces.marketplaces?.filter(row=>row.name===PLUGIN_MARKETPLACE);
+  if(market?.length!==1||typeof market[0].root!=='string')fail('plugin_marketplace_changed','Marketplace não registrado.');
+  const marketEntry=market[0];const source=marketEntry.marketplaceSource||marketEntry.source;const url=typeof source==='string'?source:source?.source||source?.url||source?.repository||source?.repo;
+  if(source?.sourceType&&source.sourceType!=='git')fail('plugin_marketplace_changed','A fonte do marketplace precisa ser o Git oficial.');
+  if(url!==`https://github.com/${PLUGIN_REPOSITORY}`&&url!==`https://github.com/${PLUGIN_REPOSITORY}.git`&&url!==PLUGIN_REPOSITORY)fail('plugin_marketplace_changed','A fonte do marketplace não é a distribuição oficial.');
+  return marketEntry;
+ }
  async function registered(context){
   const manifest=JSON.parse(await fs.readFile(join(bundleRoot,'plugin.json'),'utf8')),identity=manifest.name+'@'+PLUGIN_MARKETPLACE;
   if(!hostPackageRoot)return {manifest,identity,registered:false};
@@ -32,12 +40,7 @@ export function createPluginUpdateChannel({bundleRoot,hostPackageRoot,policy,pro
   if(entry.name!==manifest.name||entry.marketplaceName!==PLUGIN_MARKETPLACE||typeof entry.version!=='string')return {manifest,identity,registered:false};
   const root=entry.installedPath||join(codexHome,'plugins/cache',PLUGIN_MARKETPLACE,manifest.name,entry.version);
   if(resolve(root)!==resolve(hostPackageRoot))return {manifest,identity,registered:false};
-  const marketplaces=await cli(['marketplace','list','--json'],context),market=marketplaces.marketplaces?.filter(row=>row.name===PLUGIN_MARKETPLACE);
-  if(market?.length!==1||typeof market[0].root!=='string')fail('plugin_marketplace_changed','Marketplace não registrado.');
-  const marketEntry=market[0];const source=marketEntry.marketplaceSource||marketEntry.source;const url=typeof source==='string'?source:source?.source||source?.url||source?.repository||source?.repo;
-  if(source?.sourceType&&source.sourceType!=='git')fail('plugin_marketplace_changed','A fonte do marketplace precisa ser o Git oficial.');
-  if(url!==`https://github.com/${PLUGIN_REPOSITORY}`&&url!==`https://github.com/${PLUGIN_REPOSITORY}.git`&&url!==PLUGIN_REPOSITORY)fail('plugin_marketplace_changed','A fonte do marketplace não é a distribuição oficial.');
-  return {manifest,identity,registered:true,installed:entry,marketplace:marketEntry};
+  return {manifest,identity,registered:true,installed:entry,marketplace:await marketplace(context)};
  }
  return Object.freeze({
   async check(context){await policy.revalidateAdmission(context.ticket);check(context);const manifest=JSON.parse(await fs.readFile(join(bundleRoot,'plugin.json'),'utf8')),prior=(await profileStore.load()).pluginFeed||{};
@@ -53,9 +56,16 @@ export function createPluginUpdateChannel({bundleRoot,hostPackageRoot,policy,pro
    // The CLI owns approval and cache writes. PLUGIN_DATA, vault, licenses and
    // hooks are not copied into, removed from, or restored to the host cache.
    await cli(['marketplace','upgrade',PLUGIN_MARKETPLACE,'--json'],context);check(context);
-   const refreshed=await registered(context),source=join(refreshed.marketplace.root,candidate.platforms[platform].path);await verifyPluginReleaseDirectory(source,candidate.platforms[platform].files);check(context);
-   const result=await cli(['add',state.identity,'--json'],context);if(result.pluginId!==state.identity||result.version!==candidate.version||typeof result.installedPath!=='string')fail('plugin_host_unverified','O host não confirmou a versão esperada.');
-   await verifyPluginReleaseDirectory(resolve(result.installedPath),candidate.platforms[platform].files);check(context);
+   const refreshed=await marketplace(context),source=join(refreshed.root,candidate.platforms[platform].path);await verifyPluginReleaseDirectory(source,candidate.platforms[platform].files);check(context);
+   // Current Codex also upgrades installed plugins and removes the old cache.
+   // Older hosts may only refresh the marketplace. Verify both supported results.
+   const listing=await cli(['list','--marketplace',PLUGIN_MARKETPLACE,'--json'],context),matches=listing.installed?.filter(row=>row.pluginId===state.identity&&row.name===state.manifest.name&&row.marketplaceName===PLUGIN_MARKETPLACE&&row.installed&&row.enabled&&row.version===candidate.version);
+   let installedRoot;
+   if(matches?.length===1)installedRoot=matches[0].installedPath||join(codexHome,'plugins/cache',PLUGIN_MARKETPLACE,state.manifest.name,candidate.version);
+   else{
+    const result=await cli(['add',state.identity,'--json'],context);if(result.pluginId!==state.identity||result.version!==candidate.version||typeof result.installedPath!=='string')fail('plugin_host_unverified','O host não confirmou a versão esperada.');installedRoot=result.installedPath;
+   }
+   await verifyPluginReleaseDirectory(resolve(installedRoot),candidate.platforms[platform].files);check(context);
    return {installed:true,restartRequired:true,currentVersion:state.manifest.version,latestVersion:candidate.version,message:'ORACLE atualizado pelo host. Abra uma nova conversa ou reabra o plugin para usar a versão nova.'};
   }
  });

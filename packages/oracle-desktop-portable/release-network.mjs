@@ -11,7 +11,7 @@ export async function releaseBytes(url,{maximum,expectedBytes,fetchImpl=globalTh
    if(![301,302,303,307,308].includes(response.status))break;
    if(!redirects)fail('release_origin','API de distribuição redirecionada.');await response.body?.cancel();const location=response.headers.get('location');if(!location)fail('release_origin','Redirecionamento sem destino.');url=new URL(location,url).href;response=null;
   }
-  if(!response?.ok||!response.body)fail('release_unavailable','A distribuição não respondeu.');
+  if(!response?.ok||!response.body)fail('release_unavailable','A distribuição não respondeu'+(Number.isInteger(response?.status)?' (HTTP '+response.status+')':'')+'.');
   const declared=response.headers.get('content-length');if(declared!==null&&(!/^\d+$/.test(declared)||Number(declared)>maximum))fail('release_limit','Download excede o limite.');
   const chunks=[];let length=0;reader=response.body.getReader();for(;;){check();const row=await reader.read();check();if(row.done)break;length+=row.value.byteLength;if(length>maximum)fail('release_limit','Download excede o limite.');chunks.push(Buffer.from(row.value));}
   if(expectedBytes!==undefined&&length!==expectedBytes)fail('release_size','Download incompleto.');return Buffer.concat(chunks,length);

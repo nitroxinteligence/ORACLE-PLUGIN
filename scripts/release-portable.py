@@ -24,10 +24,11 @@ def main(a):
     if not secret:raise ValueError('Scoped CI distribution signing secret required')
     work=ROOT/'.work';work.mkdir(exist_ok=True);job=pathlib.Path(tempfile.mkdtemp(prefix='release-',dir=work))
     prior_pins=read(ROOT/'Resources/updates/portable-upstream.json')
-    candidates=json.loads(run(['node',ROOT/'scripts/portable-upstream-intake.mjs','--download','no']))
+    api_env={**os.environ,**({'ORACLE_RELEASE_API_TOKEN':token} if token else {})}
+    candidates=json.loads(run(['node',ROOT/'scripts/portable-upstream-intake.mjs','--download','no'],env=api_env))
     changed=any(candidates['components'][k]['commit']!=prior_pins[k]['commit'] for k in ['gbrain','aiMemory'])
     if a.event=='schedule' and not changed:print(json.dumps({'changed':False,'published':False}));return
-    baseline=job/'baseline';run(['node',ROOT/'scripts/download-portable-baseline.mjs',baseline]);previous=read(baseline/'release.json')
+    baseline=job/'baseline';run(['node',ROOT/'scripts/download-portable-baseline.mjs',baseline],env=api_env);previous=read(baseline/'release.json')
     pinned_root=ROOT/'oracle-plugin-release.json'
     pending=previous
     if pinned_root.exists():
@@ -37,7 +38,7 @@ def main(a):
     next_version=source['version'] if version(source['version'])>floor else '.'.join(map(str,[floor[0],floor[1],floor[2]+1]));sequence=max(previous['sequence'],pending['sequence'])+1
     source['version']=next_version;(ROOT/'packages/oracle-desktop-portable/plugin.json').write_text(json.dumps(source,ensure_ascii=False,indent=2)+'\n')
     prior_boot=job/'previous-boot';run(['python3',ROOT/'scripts/qualify-portable-package.py','--archive',previous['archive'],'--output',prior_boot]);prior_runtime=read(prior_boot/'report.json')
-    intake=job/'intake';run(['node',ROOT/'scripts/portable-upstream-intake.mjs','--output',intake,'--download','yes']);intake_doc=read(intake/'intake.json');gbrain=intake_doc['components']['gbrain']
+    intake=job/'intake';run(['node',ROOT/'scripts/portable-upstream-intake.mjs','--output',intake,'--download','yes'],env=api_env);intake_doc=read(intake/'intake.json');gbrain=intake_doc['components']['gbrain']
     # Provision only this disposable official checkout, honoring its lockfile.
     # No lifecycle scripts, shared vendor changes or implicit native build.
     binaries=job/'binaries';binaries.mkdir()
@@ -56,8 +57,8 @@ def main(a):
     methods=job/'method';run(['python3',ROOT/'scripts/build-official-skills.py','--source',intake/'gbrain','--output',methods,'--pin',gbrain['commit'],'--version',gbrain['version'],'--maximum-bytes','140000000'])
     vendors=job/'vendors';run(['python3',ROOT/'scripts/prepare-portable-vendors.py','--intake',intake,'--output',vendors,'--method',methods])
     test_env={**os.environ,'ORACLE_TEST_AI_MEMORY_BINARY':str(vendors/'ai-memory-mac')}
-    run(['node','--test','scripts/test-portable-content-admission.mjs','scripts/test-portable-skills-updates.mjs','scripts/test-portable-profile-upgrade.mjs','scripts/test-portable-official-hooks.mjs','scripts/test-plugin-bridge.mjs'],env=test_env)
-    catalog=job/'catalog';run(['node',ROOT/'scripts/download-reviewed-skills.mjs',catalog])
+    run(['node','--test','scripts/test-portable-content-admission.mjs','scripts/test-portable-skills-updates.mjs','scripts/test-portable-profile-upgrade.mjs','scripts/test-portable-official-hooks.mjs','scripts/test-plugin-bridge.mjs','scripts/test-publisher-fetch.mjs'],env=test_env)
+    catalog=job/'catalog';run(['node',ROOT/'scripts/download-reviewed-skills.mjs',catalog],env=api_env)
     pin_temp=pathlib.Path(os.environ.get('RUNNER_TEMP',tempfile.gettempdir()))
     if pin_temp.resolve()!=pin_temp or pin_temp.is_relative_to(ROOT):raise ValueError('External private CI signing directory required')
     def signed(command):

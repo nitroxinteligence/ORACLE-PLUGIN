@@ -5,6 +5,7 @@ import {promisify} from 'node:util';
 import {fileURLToPath} from 'node:url';
 import {latestRelease,releaseBytes} from '../packages/oracle-desktop-portable/release-network.mjs';
 import {skillsSHA} from '../packages/oracle-desktop-portable/skills-release-admission.mjs';
+import {createPublisherFetch} from './publisher-fetch.mjs';
 const execute=promisify(execFile),fail=message=>{throw new Error(message);};
 const official=Object.freeze({gbrain:'garrytan/gbrain',aiMemory:'akitaonrails/ai-memory'});
 async function json(url,fetchImpl){return JSON.parse((await releaseBytes(url,{maximum:2000000,fetchImpl,redirects:false,timeoutMS:15000})).toString('utf8'));}
@@ -35,7 +36,7 @@ export async function downloadUpstreamCandidates(candidates,output,{fetchImpl=gl
 }
 export async function main(args=process.argv.slice(2)){
  const options={};for(let i=0;i<args.length;i+=2){if(!['--output','--download'].includes(args[i])||!args[i+1]||options[args[i]])fail('Usage: --output /absolute/new/directory --download yes|no');options[args[i]]=args[i+1];}
- const candidates=await upstreamCandidates();if(options['--download']==='yes'){if(!options['--output'])fail('Output required.');return downloadUpstreamCandidates(candidates,options['--output']);}
+ const fetchImpl=createPublisherFetch(),candidates=await upstreamCandidates({fetchImpl});if(options['--download']==='yes'){if(!options['--output'])fail('Output required.');return downloadUpstreamCandidates(candidates,options['--output'],{fetchImpl});}
  if(options['--download']!==undefined&&options['--download']!=='no')fail('Download must be yes or no.');return candidates;
 }
 if(process.argv[1]&&resolve(process.argv[1])===fileURLToPath(import.meta.url))main().then(result=>process.stdout.write(JSON.stringify({components:Object.fromEntries(Object.entries(result.components).map(([key,row])=>[key,{repository:row.repository,version:row.version,commit:row.commit}])),downloaded:result.downloaded,qualified:false})+'\n')).catch(error=>{process.stderr.write(error.message+'\n');process.exitCode=1;});

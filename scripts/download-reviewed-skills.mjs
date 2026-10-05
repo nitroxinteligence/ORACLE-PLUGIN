@@ -2,8 +2,9 @@ import fs from 'node:fs/promises';import {resolve,join,dirname} from 'node:path'
 import {latestRelease,releaseBytes} from '../packages/oracle-desktop-portable/release-network.mjs';
 import {loadReviewedContentTrust,canonicalContentJSON} from '../packages/oracle-desktop-portable/content-admission.mjs';
 import {admitSkillsRelease,skillsSHA,skillsBase64,verifySkillsFile} from '../packages/oracle-desktop-portable/skills-release-admission.mjs';
+import {createPublisherFetch} from './publisher-fetch.mjs';
 const output=resolve(process.argv[2]||'');if(!process.argv[2]||await fs.realpath(dirname(output))!==dirname(output))throw Error('Canonical fresh download output required');await fs.mkdir(output,{mode:0o700});
-const release=await latestRelease('nitroxinteligence/ORACLE-SKILLS'),asset=release.assets.find(row=>row.name==='oracle-distribution.json');if(!asset||asset.size>24000000||!/^sha256:[a-f0-9]{64}$/.test(asset.digest??''))throw Error('Signed skills release required');
+const release=await latestRelease('nitroxinteligence/ORACLE-SKILLS',{fetchImpl:createPublisherFetch()}),asset=release.assets.find(row=>row.name==='oracle-distribution.json');if(!asset||asset.size>24000000||!/^sha256:[a-f0-9]{64}$/.test(asset.digest??''))throw Error('Signed skills release required');
 const bytes=await releaseBytes(asset.browser_download_url,{maximum:24000000,expectedBytes:asset.size});if('sha256:'+skillsSHA(bytes)!==asset.digest)throw Error('Signed catalog asset changed');
 const admitted=admitSkillsRelease(bytes,{trust:loadReviewedContentTrust()}),doc=JSON.parse(skillsBase64(JSON.parse(bytes).payload_base64).toString());if(doc.release_id!==release.tag_name)throw Error('Catalog release identity mismatch');await fs.writeFile(join(output,'oracle-distribution.json'),bytes,{flag:'wx'});
 const payload=join(output,'payload');await fs.mkdir(payload);const inventory=new Map(doc.files.map(row=>[row.path,row]));let count=0;

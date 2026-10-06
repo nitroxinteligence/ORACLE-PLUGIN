@@ -1,9 +1,9 @@
 {
   "schemaVersion": 2,
   "format": "oracle-concat-brotli-v2",
-  "payloadSHA256": "a8cc367ee22187222a0825455de8c7d5d0091045d4159bfda0b7d42e1d08b006",
+  "payloadSHA256": "88931d41c2862474c5eefd70cf5baf17880e1dc60af8fe8682da943b7ab2379c",
   "runtimeSHA256": "35d20dd0263e5c950194434b925454fdfa9ba6e4467da960410fa05b08a7a5b5",
-  "expandedBytes": 399439480,
+  "expandedBytes": 399465927,
   "files": [
     {
       "path": "access-grant-client.mjs",
@@ -25,8 +25,8 @@
     },
     {
       "path": "ai-memory-composition.mjs",
-      "bytes": 8169,
-      "sha256": "604cd6f7a63c8b92df0b93e8ba0d98183c85d15d72535ed6bff05c7e6b2eddd8",
+      "bytes": 8625,
+      "sha256": "b334b129fae394bde158abb482aa227e66e414c14e442d68ba6e0fe25d5f609f",
       "mode": 420
     },
     {
@@ -37,8 +37,8 @@
     },
     {
       "path": "ai-memory-process.mjs",
-      "bytes": 15216,
-      "sha256": "cd1680dd2e47abc72a557588c8e4d6a202b76553ef2f52f609cd7b1967047d5d",
+      "bytes": 15678,
+      "sha256": "12c7547c349557cc67852af577e092c370b6e3a9e2a1924d66c7a5bb5cf0d15a",
       "mode": 420
     },
     {
@@ -55,8 +55,8 @@
     },
     {
       "path": "ai-memory-runtime.mjs",
-      "bytes": 9749,
-      "sha256": "a8a263ab28e1a9945bf5d9b88f7542413d2f1d32b3b4e7f571fed3b8fa3849ec",
+      "bytes": 10122,
+      "sha256": "c6d67ee5197affcf48ffa00897861fd1f89c626c9e8c9ed794834b17b8656f87",
       "mode": 420
     },
     {
@@ -145,8 +145,8 @@
     },
     {
       "path": "codex-user-skills-registration.mjs",
-      "bytes": 7446,
-      "sha256": "cd08be3e5cc63c97d4941a8cda5398767f751777858693a4c25ee0392530dd23",
+      "bytes": 10021,
+      "sha256": "7091f33cbe31851c1c62a1006d2f4d462c3057c86c2861d8cc0d916964b8a0e1",
       "mode": 420
     },
     {
@@ -169,8 +169,8 @@
     },
     {
       "path": "content-source-composition.mjs",
-      "bytes": 12331,
-      "sha256": "5d392d3ce06a3bb5db23b5f71e68688fc56121abf6393851b90f5206c1eb59cf",
+      "bytes": 13404,
+      "sha256": "2f5dad8d0c69a7a48344d1c3d9eea134e69823f495386d9287020bbec8c0a148",
       "mode": 420
     },
     {
@@ -92100,8 +92100,8 @@
     },
     {
       "path": "knowledge-service.mjs",
-      "bytes": 11536,
-      "sha256": "9aebcbf63a5ea78aae73ad64905eb049a287572f007588f7e39fb401a87dc0f3",
+      "bytes": 14826,
+      "sha256": "d02f14b5e3f2c3910fc1e8b7992840734c15b8995d6b5adf326488224c029fc6",
       "mode": 420
     },
     {
@@ -92118,8 +92118,8 @@
     },
     {
       "path": "mac-bookmark-provider.mjs",
-      "bytes": 10508,
-      "sha256": "1450d54f79955b7268566959067a6a194f6b82ca1889e2cbedb309da8adc1463",
+      "bytes": 10777,
+      "sha256": "f432cd03a880594d0c5986cfaec5386679382d2038aaece73817f1731427c99d",
       "mode": 420
     },
     {
@@ -92178,26 +92178,26 @@
     },
     {
       "path": "onboarding-ai-memory.mjs",
-      "bytes": 7172,
-      "sha256": "91cb709d9fd1dfbc73c4308d9264727d6925bf3e68ef506c0d7233cbae3643b4",
+      "bytes": 8929,
+      "sha256": "f66da742ac5fce16bae65d6ee1fe4f95c717f44d49298f5b5bb7c50bb46f10e3",
       "mode": 420
     },
     {
       "path": "onboarding-coordinator.mjs",
-      "bytes": 8617,
-      "sha256": "7438fc2babcc98f8a1524516eb887fb961ecf38a27f8f59a333d2c0e0b6e4de1",
+      "bytes": 10012,
+      "sha256": "b12a9bb3127c3b666e8786af3877cc8201b47f832073d0590197d112adb1a3dd",
       "mode": 420
     },
     {
       "path": "onboarding-status.mjs",
-      "bytes": 7753,
-      "sha256": "7d0ab31ac4684960be5f39b1b6f7c561d8e36cc59e3453a8f96541d28226e279",
+      "bytes": 8291,
+      "sha256": "4f84c9ce341834a52f804c8f0328bd7cdb422a68ec3a354a4676501ac3ecd11d",
       "mode": 420
     },
     {
       "path": "platform-host-providers.mjs",
-      "bytes": 1939,
-      "sha256": "2bb3df1186f6e530531c6fe9ac6342535af5b876099c7ae8064129d68ec20e7a",
+      "bytes": 2141,
+      "sha256": "a1fb89b7d633f72fda8c84f4b3640b5a0068a0ea8bdc3ffdbfada53450e32e81",
       "mode": 420
     },
     {
@@ -92221,13 +92221,13 @@
     {
       "path": "plugin.json",
       "bytes": 1102,
-      "sha256": "889842066e09af63de6cf5b44dd03f68eae61a4d8f2fe1afe57e42b20f50ff0a",
+      "sha256": "45c6feeae9b1f37a1cb0259a512c64221c2b52a16e4479b9459e3f22a44a128b",
       "mode": 420
     },
     {
       "path": "portable-package-receipt.json",
-      "bytes": 3092554,
-      "sha256": "f71cec43548897e9eb27389458258e903950a3c45172397471b12402b545551e",
+      "bytes": 3093444,
+      "sha256": "ad0ba6291521780e4e475a8c8ed0261fe5440c90cefffed969ea585a8db00102",
       "mode": 420
     },
     {
@@ -92262,8 +92262,8 @@
     },
     {
       "path": "profile-store.mjs",
-      "bytes": 4841,
-      "sha256": "f42e01b3c880ff04a60abb5b6854969c4b03b584f21bb0386c5867703769243a",
+      "bytes": 5532,
+      "sha256": "0cbec0679a64f8599327acb53b4a2702a6d2ca89fa4e18eb707a557d03be4197",
       "mode": 420
     },
     {
@@ -120928,8 +120928,8 @@
     },
     {
       "path": "service.mjs",
-      "bytes": 42960,
-      "sha256": "8e627224737b247d408533999c0d67fcb4a7875964f5e4fea7f3a2b31f1e5cea",
+      "bytes": 46590,
+      "sha256": "b53cf5f6e003aa18ef20cce232bed8e16d1dbb58d737eea823a697e438f1c619",
       "mode": 420
     },
     {
@@ -120970,20 +120970,38 @@
     },
     {
       "path": "vault-content-transaction.mjs",
-      "bytes": 9177,
-      "sha256": "6e4544155e0d2f7ae7427d6171c45da200b71681b4a8132f7f8a89ecf8bf0c93",
+      "bytes": 11245,
+      "sha256": "06fd1eb7c32f5942aa87f00cd2aa44c5dbb1d89974e72f800622ed84bc756356",
       "mode": 420
     },
     {
       "path": "vault-service.mjs",
-      "bytes": 29460,
-      "sha256": "07db905dacfc5e0f6f78bf3c98001085ea2cbcaf4817a4d7a0004960ecee59b4",
+      "bytes": 30281,
+      "sha256": "3d282851b60d5037c3f6a422a4c78552b4fd793665e90819aaf6ebc31c4820b5",
       "mode": 420
     },
     {
       "path": "windows-shell-provider.mjs",
       "bytes": 5764,
       "sha256": "cda2c46ae3813f08f9d80aeb250289dfac569751b43bd57c0af731e018a2a093",
+      "mode": 420
+    },
+    {
+      "path": "ai-memory-installation-verifier.mjs",
+      "bytes": 2540,
+      "sha256": "31f27cd90ec0e9d90b9d672a31612abf058cfd07bb336bbaa1ea68cc38cf67d5",
+      "mode": 420
+    },
+    {
+      "path": "persistent-vault-selection.mjs",
+      "bytes": 2183,
+      "sha256": "765e8e01f3abb6579b811db12b376d81fb9527f7283dae431c0e301cf024ea35",
+      "mode": 420
+    },
+    {
+      "path": "profile-write-lock.mjs",
+      "bytes": 1234,
+      "sha256": "6cb4254ab165d5b2dc37fdc711cee6a52aeb3b86e4f0c650873a4191031a96c7",
       "mode": 420
     }
   ]

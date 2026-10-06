@@ -1,9 +1,9 @@
 {
   "schemaVersion": 2,
   "format": "oracle-concat-brotli-v2",
-  "payloadSHA256": "88931d41c2862474c5eefd70cf5baf17880e1dc60af8fe8682da943b7ab2379c",
+  "payloadSHA256": "f8df2dabd173708bdaece44f6044038ddf04b5be038157cde5f2156dafbac0b9",
   "runtimeSHA256": "35d20dd0263e5c950194434b925454fdfa9ba6e4467da960410fa05b08a7a5b5",
-  "expandedBytes": 399465927,
+  "expandedBytes": 399467192,
   "files": [
     {
       "path": "access-grant-client.mjs",
@@ -92221,13 +92221,13 @@
     {
       "path": "plugin.json",
       "bytes": 1102,
-      "sha256": "45c6feeae9b1f37a1cb0259a512c64221c2b52a16e4479b9459e3f22a44a128b",
+      "sha256": "62d16a2df5d4652d073f71d3779176a040cfc54345aa9b77e0226b563bd1fc43",
       "mode": 420
     },
     {
       "path": "portable-package-receipt.json",
-      "bytes": 3093444,
-      "sha256": "ad0ba6291521780e4e475a8c8ed0261fe5440c90cefffed969ea585a8db00102",
+      "bytes": 3092977,
+      "sha256": "d0a10c772d116fc90dc29489b151600e423f65c614766fb68661efb5c92e2e04",
       "mode": 420
     },
     {
@@ -120928,8 +120928,8 @@
     },
     {
       "path": "service.mjs",
-      "bytes": 46590,
-      "sha256": "b53cf5f6e003aa18ef20cce232bed8e16d1dbb58d737eea823a697e438f1c619",
+      "bytes": 47343,
+      "sha256": "cb7d4e4c16bb97b1856456c2348332506fb99ed31b17f2b14637f16b2502114c",
       "mode": 420
     },
     {
@@ -121002,6 +121002,12 @@
       "path": "profile-write-lock.mjs",
       "bytes": 1234,
       "sha256": "6cb4254ab165d5b2dc37fdc711cee6a52aeb3b86e4f0c650873a4191031a96c7",
+      "mode": 420
+    },
+    {
+      "path": "vault-restoration.mjs",
+      "bytes": 979,
+      "sha256": "7fbe9095346f14032c4687c57af38e6ad2e995a4739863d2186587f859211abe",
       "mode": 420
     }
   ]

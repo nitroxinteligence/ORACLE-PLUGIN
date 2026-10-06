@@ -1,7 +1,7 @@
 {
   "schemaVersion": 2,
   "format": "oracle-concat-brotli-v2",
-  "payloadSHA256": "25fc6b8c456f584e4f2418adf6ab5a088baf7b1e9afaefdb8d362eef51fda098",
+  "payloadSHA256": "e2e54eedbd2f4e82f97680327167b22da84353b187aea5d51025a82f85224777",
   "runtimeSHA256": "15277c59ccd6c6c20f8dc9716c2b59c1776320d606b6a8658f70be8799519ca4",
   "packedRuntime": {
     "path": "runtime/bun.exe.gz",
@@ -9,12 +9,12 @@
     "bytes": 39676709,
     "expandedBytes": 86096984
   },
-  "expandedBytes": 414282047,
+  "expandedBytes": 414283312,
   "files": [
     {
       "path": ".codex-plugin/plugin.json",
       "bytes": 938,
-      "sha256": "e343231056dfb0fdaf2ba40a51e76473fa1c7aab7ea158307fefe084107b20a5",
+      "sha256": "7942571d11acefa67da2cfcc24b2a15f99693a3ab41b1ac30bfff04c012c33f7",
       "mode": 420
     },
     {
@@ -92239,13 +92239,13 @@
     {
       "path": "plugin.json",
       "bytes": 1098,
-      "sha256": "c6370688ab7ee21bc71a77f689a86424fe86b13c92902110190a032db070a418",
+      "sha256": "dab80517af46096632585b6ae19ab9cd08a24ef95b4d89cefc421ee500c5513f",
       "mode": 420
     },
     {
       "path": "portable-package-receipt.json",
-      "bytes": 3080450,
-      "sha256": "30c8b86dc80cfdb32f7be3217af6c8327fe1e4e87ddc8294afd8eacf6c25453f",
+      "bytes": 3079983,
+      "sha256": "4762d0fb5ab3ead659a21ee503acf68b934b2b893e9930de0b3467c0f76e4c05",
       "mode": 420
     },
     {
@@ -120976,8 +120976,8 @@
     },
     {
       "path": "service.mjs",
-      "bytes": 46590,
-      "sha256": "b53cf5f6e003aa18ef20cce232bed8e16d1dbb58d737eea823a697e438f1c619",
+      "bytes": 47343,
+      "sha256": "cb7d4e4c16bb97b1856456c2348332506fb99ed31b17f2b14637f16b2502114c",
       "mode": 420
     },
     {
@@ -121050,6 +121050,12 @@
       "path": "profile-write-lock.mjs",
       "bytes": 1234,
       "sha256": "6cb4254ab165d5b2dc37fdc711cee6a52aeb3b86e4f0c650873a4191031a96c7",
+      "mode": 420
+    },
+    {
+      "path": "vault-restoration.mjs",
+      "bytes": 979,
+      "sha256": "7fbe9095346f14032c4687c57af38e6ad2e995a4739863d2186587f859211abe",
       "mode": 420
     }
   ]

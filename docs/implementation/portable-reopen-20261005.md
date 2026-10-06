@@ -1,0 +1,44 @@
+# Oracle System 0.1.26: retomada da instalação
+
+O processo portátil perdia a seleção do vault e os recibos em memória ao encerrar.
+O perfil ainda continha a instalação, mas a abertura seguinte voltava à escolha
+do Obsidian. Alterar somente a versão do ZIP não corrigia esse ciclo.
+
+No macOS arm64, o picker agora cria um bookmark CoreFoundation com security
+scope. A retomada resolve o bookmark, ativa a permissão do sistema e confere a
+identidade do diretório. A licença é validada separadamente. Caminhos, preferências
+e marcadores de conclusão no JSON não concedem acesso. Revogação explícita apaga
+o bookmark; encerramento normal apenas libera a permissão ativa.
+
+Uma instalação existente é conferida com o manifesto assinado do pacote, leitura
+dos arquivos do acervo e método, estado real do GBrain e schema SQLite do perfil
+próprio do AI Memory. Essa retomada não baixa nem copia novamente o acervo.
+Notas alteradas exigem atualização do índice derivado. Arquivos da instalação
+com conteúdo diferente são preservados e apresentados como pendência de revisão.
+A tentativa seguinte repete a verificação, sem entrar no instalador por engano.
+
+A identidade da instalação e a confirmação da apresentação inicial persistem.
+Os registros das skills no Codex são verificados sem reconstruir o workspace a
+cada conversa. Um workspace continua sendo preparado e conferido quando a
+integração explícita precisa dele.
+
+Instalação da memória e serviço ativo são estados distintos. Ao reabrir, o
+executável fixado, sua versão real, propriedade do perfil, configuração e schema
+são conferidos sem iniciar um segundo serviço ou restaurar consentimento de
+captura, portabilidade, hooks, manutenção ou conta Codex a partir de um journal.
+
+Atualizações do perfil mantêm a trava oficial do upstream durante toda a leitura,
+mutação e substituição atômica. Operações de GBrain também são serializadas entre
+conversas. A trava do kernel é liberada pelo sistema após encerramento abrupto;
+travas históricas de outras versões não são removidas por idade ou PID.
+
+`scripts/qualify-portable-reopen.mjs` verifica seleção real via bookmark, fechamento
+e reabertura, identidade estável, duas conversas em processos diferentes, morte de
+um escritor com trava ativa, preservação de arquivos e revogação. O assinador exige
+esse relatório vinculado ao payload efetivamente expandido do ZIP, além das
+qualificações de boot e compatibilidade de perfis já existentes.
+
+Uma instalação antiga sem bookmark exige uma seleção explícita da pasta uma vez.
+A partir dela, a versão nova confere os arquivos já instalados e persiste a
+autorização para as próximas aberturas. A execução Windows permanece sem
+qualificação em um host Windows real.

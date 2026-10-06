@@ -2,6 +2,7 @@ import fs from 'node:fs/promises';
 import { constants } from 'node:fs';
 import path from 'node:path';
 import { randomUUID } from 'node:crypto';
+import {acquireDirectoryProfileLock,waitForProfileLock} from './profile-write-lock.mjs';
 
 export async function assertPrivatePath(target, {privateFilesystem} = {}) {
   const absolute = path.resolve(target);
@@ -17,16 +18,17 @@ export async function assertPrivatePath(target, {privateFilesystem} = {}) {
 
 /** Private host state only. Pass the host-provided PLUGIN_DATA directory explicitly.
  * load/save/update never import an Oracle profile or turn persisted paths into grants.
- * JSON updates are serialized within this store instance; callers must use one instance.
+ * JSON updates hold one interprocess lease across read/modify/atomic rename.
  * save/update accept trusted {beforeCommit} synchronous admission checked before rename.
  */
-export function createProfileStore({ dataDir, platform=process.platform, privateFilesystem } = {}) {
+export function createProfileStore({ dataDir, platform=process.platform, privateFilesystem, acquireLock } = {}) {
   if(platform==='win32'&&(!privateFilesystem||typeof privateFilesystem.inspect!=='function'||typeof privateFilesystem.privateDirectory!=='function'))throw Object.assign(new Error('WINDOWS_PRIVATE_FILESYSTEM_REQUIRED'),{code:'host_capability_unsupported'});
   const noFollow=platform==='win32'?0:constants.O_NOFOLLOW;
   const assertPath=target=>assertPrivatePath(target,{privateFilesystem});
   if (!dataDir || !path.isAbsolute(dataDir)) throw new Error('PLUGIN_DATA_REQUIRED');
   const root = path.resolve(dataDir);
   const file = path.join(root, 'profile.json');
+  const lockPath=path.join(root,acquireLock?'.profile-write.kernel.lock':'.profile-write.directory.lock');
   let queue = Promise.resolve();
   const exclusive = fn => {
     const result = queue.then(fn);
@@ -86,9 +88,15 @@ export function createProfileStore({ dataDir, platform=process.platform, private
       return structuredClone(value);
     } finally { await handle?.close(); await fs.unlink(temporary).catch(() => {}); }
   }
+  async function transaction(work){
+    await prepare();
+    try{await assertPath(lockPath);const entry=await fs.lstat(lockPath);if(entry.nlink!==1&&acquireLock||acquireLock&&!entry.isFile())throw new Error('PROFILE_LOCK_INVALID');}catch(error){if(error.code!=='ENOENT')throw error;}
+    const release=await waitForProfileLock(acquireLock||acquireDirectoryProfileLock,lockPath);
+    try{await assertPath(root);return await work();}finally{await release();}
+  }
   return {
     load: () => exclusive(read),
-    save: (value, options) => exclusive(() => write(value, options)),
-    update: (mutate, options) => exclusive(async () => write(await mutate(await read()), options)),
+    save: (value, options) => exclusive(() => transaction(()=>write(value, options))),
+    update: (mutate, options) => exclusive(() => transaction(async()=>write(await mutate(await read()), options))),
   };
 }

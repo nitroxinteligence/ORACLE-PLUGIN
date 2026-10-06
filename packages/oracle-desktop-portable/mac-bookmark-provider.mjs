@@ -18,7 +18,7 @@ function canonicalDirectory(path) {
   return path;
 }
 
-/** ABI audited against Apple CFURL.h/CFString.h/CFData.h and Bun 1.3.10 ffi.d.ts.
+/** ABI audited against Apple CFURL.h/CFString.h/CFData.h and qualified in Bun 1.4.2.
  * Boolean is UInt8, CFIndex/CFURLPathStyle signed 64-bit, CFOptionFlags unsigned 64-bit.
  * No Objective-C, callbacks, toolchain, GUI or user Keychain access. */
 export function createCoreFoundationBookmarkBindings(ffi) {
@@ -105,7 +105,7 @@ export function createCoreFoundationBookmarkBindings(ffi) {
 }
 
 export async function loadMacCoreFoundationBookmarkBindings() {
-  if (process.platform !== 'darwin' || process.arch !== 'arm64' || process.versions.bun !== '1.3.10') fail('host_capability_unsupported', 'Bookmarks exigem macOS arm64 e Bun 1.3.10 revisado.');
+  if (process.platform !== 'darwin' || process.arch !== 'arm64' || !['1.3.10','1.4.2'].includes(process.versions.bun)) fail('host_capability_unsupported', 'Bookmarks exigem macOS arm64 e uma versão revisada do Bun.');
   let ffi; try { ffi = await import('bun:ffi'); } catch { fail('host_capability_unsupported', 'Bun FFI indisponível.'); }
   return createCoreFoundationBookmarkBindings(ffi);
 }
@@ -129,8 +129,7 @@ export function createMacBookmarkProvider({ platform = process.platform, binding
     if (bytes.toString('base64') !== record.bookmarkBase64) fail('invalid_directory_bookmark', 'Bookmark não canônico.');
     return boundedBytes(bytes);
   };
-  const withDirectoryGrant = async (record, work) => {
-    if (typeof work !== 'function') fail('invalid_request', 'Operação de pasta inválida.');
+  const acquireDirectoryGrant = async record => {
     const bytes = decode(record), expectedPath = record.path, resolved = (await getBindings()).resolveBookmark(bytes);
     let started = false, live = false;
     try {
@@ -141,12 +140,13 @@ export function createMacBookmarkProvider({ platform = process.platform, binding
       started = true;
       if (canonicalize(path) !== path) fail('invalid_directory_path', 'Pasta não canônica.');
       live = true;
-      const lease = Object.freeze({ path, mechanism: 'corefoundation-security-scoped-bookmark', assertActive() { if (!live) fail('directory_grant_closed', 'Permissão da pasta encerrada.'); } });
-      return await work(lease);
-    } finally {
-      live = false;
-      try { if (started) resolved.stopAccessing(); } finally { resolved.dispose(); }
-    }
+      return Object.freeze({ path, mechanism: 'corefoundation-security-scoped-bookmark', assertActive() { if (!live) fail('directory_grant_closed', 'Permissão da pasta encerrada.'); }, release(){if(!live)return;live=false;try{if(started)resolved.stopAccessing();}finally{resolved.dispose();}} });
+    } catch(error) {try{if(started)resolved.stopAccessing();}finally{resolved.dispose();}throw error;}
+  };
+  const withDirectoryGrant = async (record, work) => {
+    if (typeof work !== 'function') fail('invalid_request', 'Operação de pasta inválida.');
+    const lease=await acquireDirectoryGrant(record);
+    try{return await work(lease);}finally{lease.release();}
   };
   return Object.freeze({
     async createBookmark({ path, userInitiated = false } = {}) {
@@ -158,6 +158,7 @@ export function createMacBookmarkProvider({ platform = process.platform, binding
       await withDirectoryGrant(record, () => undefined);
       return record;
     },
+    acquireDirectoryGrant,
     withDirectoryGrant,
   });
 }

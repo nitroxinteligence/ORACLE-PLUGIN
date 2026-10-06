@@ -7,6 +7,9 @@ import {createAccessPolicy} from './access-policy.mjs';
 import {createHostCapabilities,validatedExternalURL} from './host-capabilities.mjs';
 import {createProfileStore,assertPrivatePath} from './profile-store.mjs';
 import {createVaultService} from './vault-service.mjs';
+import {createPersistentVaultSelection} from './persistent-vault-selection.mjs';
+import {createProfileKernelLock} from './profile-kernel-lock.mjs';
+import {GBRAIN_NATIVE_PINS} from './gbrain-native-pins.mjs';
 import {createPlatformHostProviders} from './platform-host-providers.mjs';
 import {createDispatcher,createVaultHandlers} from './dispatcher.mjs';
 import {loadCatalog,createSnapshot} from './catalog-snapshot.mjs';
@@ -52,7 +55,7 @@ function lazyHostConnection({policy,vault,dataDir}){
 // Setup never grants portability, chat capture, hooks or connection consent.
 function defaultAIMemoryBackend({root,policy,vault,profileStore,dataDir,relayAuthorization,portabilityAuthorization,verifyExplicitRequest,notifyToolsChanged}){
   let binding=null,composition=null,consentGeneration=0;
-  const phase=createOnboardingAIMemory({policy,vault,profileStore,createBackend:async({ticket,binding:requested,signal})=>{
+  const phase=createOnboardingAIMemory({policy,vault,profileStore,createBackend:async({ticket,binding:requested,signal,restoreOnly=false})=>{
     policy.assertAdmission(ticket);const selected=vault.status();
     if(ticket.capability!=='configure'||!selected.selected||requested.vault!==selected.root||requested.selectionRevision!==String(selected.generation)||requested.setupAuthorized!==true)fail('ai_memory_binding_changed','O preparo da memória exige o plano e a pasta atuais.');
     let next;try{next=portabilityAuthorization?.binding?.();}catch{}
@@ -60,7 +63,7 @@ function defaultAIMemoryBackend({root,policy,vault,profileStore,dataDir,relayAut
     if(['vault','selectionRevision','planHash'].some(key=>next[key]!==requested[key]))fail('ai_memory_consent_changed','A autorização pertence a outro plano.');
     if(binding&&JSON.stringify(binding)!==JSON.stringify(next)){await composition?.close();composition=null;}binding=next;
     composition??=createAIMemoryComposition({bundleRoot:resolve(root),dataDir,policy,vault,profileStore,currentBinding:()=>binding,relayAuthorization,portabilityAuthorization,verifyExplicitRequest});
-    const backend=await composition.createBackend({ticket,binding,signal});portabilityAuthorization?.attachMigrationProvider?.({snapshotReader:backend.snapshotReader,mirror:backend.mirror,currentBinding:()=>binding});notifyToolsChanged();return backend;
+    const backend=await composition.createBackend({ticket,binding,signal,restoreOnly});portabilityAuthorization?.attachMigrationProvider?.({snapshotReader:backend.snapshotReader,mirror:backend.mirror,currentBinding:()=>binding});notifyToolsChanged();return backend;
   }});
   return {phase,async tools(options){if(!composition)return [];const result=await composition.tools(options);return result;},invoke(name,args,options){if(!composition)fail('ai_memory_unavailable','Prepare o AI Memory antes de usar esta ferramenta.');return composition.invoke(name,args,options);},cancel(){phase.cancel();composition?.cancel();notifyToolsChanged();},async close(){await phase.close();await composition?.close();}};
 }
@@ -74,7 +77,9 @@ export async function createService({root,hostPackageRoot,dataDir=process.env.OR
   if(accessGrantResolver!==undefined&&typeof accessGrantResolver!=='function')fail('invalid_composition','Emissor de acesso inválido.');
   const policy=createAccessPolicy({keys:reviewedKeys,deviceProvider,...(now?{now}:{})});
   const privateFilesystem=process.platform==='win32'?await(await import('./runtime-payload-windows.mjs')).createWindowsRuntimePlatform():undefined;
-  const profileStore=createProfileStore({dataDir,privateFilesystem});
+  const lockPin=GBRAIN_NATIVE_PINS[`${process.platform}-${process.arch}`],lockAddon=lockPin?join(root,lockPin.path):null;
+  const acquireLock=lockAddon&&existsSync(lockAddon)?createProfileKernelLock(lockAddon):undefined;
+  const profileStore=createProfileStore({dataDir,privateFilesystem,acquireLock});
   accessGrantResolver??=createPortableAccessGrantResolver({resourcesRoot:resources});
   if(!contentSourceProvider&&existsSync(join(root,'resources/updates/portable-content.json')))contentSourceProvider=createPortableContentSource({bundleRoot:resolve(root),dataDir,profileStore,policy});
   const profile=await profileStore.load();
@@ -88,9 +93,8 @@ export async function createService({root,hostPackageRoot,dataDir=process.env.OR
   const capabilities=createHostCapabilities({providers:resolvedProviders,host,runtime:{name:process.versions.bun?'Bun':'Node.js',version:process.versions.bun||process.versions.node}});
   let pickerSignal,pickerBusy=false;
   const preserveVersionConflict=async(value,{check})=>{check();await assertPrivatePath(dataDir,{privateFilesystem});const dir=join(dataDir,'conflicts');await fs.mkdir(dir,{mode:0o700}).catch(error=>{if(error.code!=='EEXIST')throw error;});await assertPrivatePath(dir,{privateFilesystem});check();const file=join(dir,randomUUID().toUpperCase()+'.md'),handle=await fs.open(file,constants.O_WRONLY|constants.O_CREAT|constants.O_EXCL|constants.O_NOFOLLOW,0o600);try{check();await handle.writeFile(value.content);await handle.sync();check();return file;}finally{await handle.close();}};
-  const vault=createVaultService({profileStore,maxScanEntries,inspectPath:resolvedProviders.inspectPath,reveal:resolvedProviders.reveal,preserveVersionConflict,admission:{createAdmissionTicket:()=>policy.requireCapability('useOracle'),assertAdmissionTicket:ticket=>policy.assertAdmission(ticket)},selectionAdapter:selectionAdapter||{
-    async selectVault(){const selected=await capabilities.chooseDirectory({userInitiated:true,signal:pickerSignal});return selected?{root:selected.path,explicitSelection:true}:null;}
-  }});
+  const selectionProvider=selectionAdapter||createPersistentVaultSelection({profileStore,bookmarks:resolvedProviders.directoryBookmarks,chooseDirectory:()=>capabilities.chooseDirectory({userInitiated:true,signal:pickerSignal})});
+  const vault=createVaultService({profileStore,maxScanEntries,inspectPath:resolvedProviders.inspectPath,reveal:resolvedProviders.reveal,preserveVersionConflict,admission:{createAdmissionTicket:()=>policy.requireCapability('useOracle'),assertAdmissionTicket:ticket=>policy.assertAdmission(ticket)},selectionAdapter:selectionProvider});
   let runtimeConfig=knowledgeRuntime;
   if(!runtimeConfig&&existsSync(join(root,'portable-package-receipt.json'))&&existsSync(join(root,'engine-source-receipt.json'))) {
     const packageReceipt=JSON.parse(readFileSync(join(root,'portable-package-receipt.json'),'utf8'));
@@ -101,7 +105,7 @@ export async function createService({root,hostPackageRoot,dataDir=process.env.OR
   // The production STDIO entrypoint never supplies this option; no env/RPC flag.
   if(typeof knowledgeNetworkSandbox!=='boolean')fail('invalid_composition','Configuração de execução inválida.');
   if(runtimeConfig)runtimeConfig={...runtimeConfig,networkSandbox:knowledgeNetworkSandbox,...(process.platform==='win32'?{systemDirectory:resolvedProviders.systemDirectory}:{})};
-  const knowledge=createKnowledgeService({policy,vault,profileStore,dataDir,runtimeConfig});
+  const knowledge=createKnowledgeService({policy,vault,profileStore,dataDir,runtimeConfig,acquireLock});
   const knowledgeInterviews=createKnowledgeInterviewService({policy,vault,profileStore,openCodex:resolvedProviders.openCodex,inspectPath:resolvedProviders.inspectPath,privateFilesystem,
     indexProfile:root=>join(dataDir,'knowledge',createHash('sha256').update(JSON.stringify(root)).digest('hex'),'gbrain/profile')});
   if(codexConnectionFactory!==undefined&&typeof codexConnectionFactory!=='function')fail('invalid_composition','Provider de conexão inválido.');
@@ -167,12 +171,18 @@ export async function createService({root,hostPackageRoot,dataDir=process.env.OR
   const registerUserSkills=createCodexUserSkillsRegistration({policy,vault,...(codexUserHome===undefined?{}:{userHome:codexUserHome})});
   let installedSkillsSource=null;
   const admittedContentSource=typeof contentSourceProvider==='function'?async options=>{const source=await contentSourceProvider(options);if(pendingMemoryInstallation)await memoryConsent.admitInstallation(pendingMemoryInstallation,source.admitted,options);codexInstallationProvider.admit?.(source,options);installedSkillsSource=source.skills;return source;}:null;
-  const afterLocalVerification=async({ticket,signal,check})=>{
+  if(admittedContentSource&&typeof contentSourceProvider.verifyInstalled==='function')admittedContentSource.verifyInstalled=async options=>{const source=await contentSourceProvider.verifyInstalled(options);codexInstallationProvider.admit?.(source,options);installedSkillsSource=source.skills;return source;};
+  const afterLocalVerification=async({ticket,signal,check,restoring=false})=>{
+    if(restoring){
+      let registration;try{registration=await registerUserSkills.verifyExisting({admitted:installedSkillsSource,ticket,signal,check});}
+      catch(error){if(error.code!=='ENOENT')throw error;registration=await registerUserSkills({admitted:installedSkillsSource,ticket,signal,check});}check();
+      assertCompleteCodexUserSkillsRegistration(installedSkillsSource,registration);return;
+    }
     const installed=await codexInstallationProvider({ticket,signal});check();
     const registration=await registerUserSkills({admitted:installedSkillsSource,ticket,signal,check:()=>{check();installed.assertCurrent();}});check();
     assertCompleteCodexUserSkillsRegistration(installedSkillsSource,registration);
     let requestedHooks=false;try{requestedHooks=memoryConsent.captureChoices().installOfficialHooks===true;}catch{}
-    if(requestedHooks){
+    if(requestedHooks&&!restoring){
       const consent=await memoryConsent.requireCurrent({ticket,signal});
       const verify=()=>{check();memoryConsent.assertCurrent(consent);installed.assertCurrent();};
       officialHooksReceipt=await officialHooksInstaller({workspace:installed.workspace,check:verify,signal});
@@ -193,7 +203,7 @@ export async function createService({root,hostPackageRoot,dataDir=process.env.OR
   const exportHandler=(name,p,context)=>{if(!exports)fail('export_unavailable','A exportação PNG ainda não está disponível neste host.');return exports[name](p,context);};
   const finishExport=async(p,context)=>{const controller=new AbortController(),abort=()=>controller.abort();context.signal?.addEventListener('abort',abort,{once:true});if(context.signal?.aborted)abort();exportControllers.add(controller);try{return await exportHandler('finish',p,{...context,signal:controller.signal});}finally{exportControllers.delete(controller);context.signal?.removeEventListener('abort',abort);}};
   const localContent=async(action,p,context)=>{noArgs(p);if(!coordinator)fail('content_source_unavailable','A fonte assinada do acervo ainda não está disponível nesta instalação.');return coordinator[action]({signal:context.signal});};
-  let installationRunID=null,skillsDiscoveryReceipt=null;
+  let installationRunID=null,skillsDiscoveryReceipt=null,restorationRequested=false;
   const catalog=loadCatalog(resources);
   const status=async()=>{
     const account=connection?await connection.verifyActiveConnection():null;
@@ -206,12 +216,31 @@ export async function createService({root,hostPackageRoot,dataDir=process.env.OR
   const startInstallation=(action,context)=>{
     updates?.assertIdle();
     installationOperation.assertIdle();if(coordinator.snapshot().running)fail('onboarding_busy','A instalação já está em andamento.');
-    const selected=vault.status(),ticket=context.ticket;
+    const selected=vault.status(),ticket=context.ticket;restorationRequested=action==='restore';
     const check=()=>{policy.assertAdmission(ticket);const active=vault.status();if(!active.selected||active.root!==selected.root||active.generation!==selected.generation)fail('stale_admission','O vault mudou durante a instalação.');};
     installationOperation.start(async({signal,check:assertCurrent})=>{
       await coordinator[action]({signal});
-      assertCurrent();notifyAITools();
+      assertCurrent();
+      const proof=coordinator.snapshot();
+      if(proof.localContentVerified&&proof.indexVerified){
+        const key=epochHash(JSON.stringify(selected.root));
+        await profileStore.update(profile=>{assertCurrent();const previous=profile.installationRuns?.[key],welcome=profile.preferences?.knowledgeWelcome;
+          installationRunID=previous?.manifestSHA256===proof.manifestSHA256&&typeof previous.runID==='string'?previous.runID:action==='restore'&&welcome?.vault===selected.root&&typeof welcome.runID==='string'?welcome.runID:installationRunID;
+          return {...profile,installationRuns:{...profile.installationRuns,[key]:{schemaVersion:1,runID:installationRunID,manifestSHA256:proof.manifestSHA256}}};
+        },{beforeCommit:assertCurrent});assertCurrent();
+      }
+      notifyAITools();
     },{check,signal:context.signal});installationRunID??=randomUUID();
+  };
+  const restoreExisting=async context=>{
+    if(!coordinator||typeof admittedContentSource?.verifyInstalled!=='function'||!vault.status().selected)return false;
+    // History schedules verification only. Completion still requires signed
+    // file readback, the actual index and the owned AI Memory installation.
+    const selected=vault.status(),identity=await fs.lstat(selected.root),profile=await profileStore.load();policy.assertAdmission(context.ticket);
+    const candidate=Object.values(profile.contentInstallations||{}).some(row=>row?.completed===true&&row.rootIdentity?.dev===identity.dev&&row.rootIdentity?.ino===identity.ino);
+    if(!candidate)return false;
+    const previous=profile.installationRuns?.[epochHash(JSON.stringify(selected.root))];installationRunID=typeof previous?.runID==='string'?previous.runID:randomUUID();
+    startInstallation('restore',context);return true;
   };
   const preferences=async(mutator,ticket)=>profileStore.update(value=>{policy.assertAdmission(ticket);value.preferences??={};mutator(value.preferences);return value;},{beforeCommit:()=>policy.assertAdmission(ticket)});
   const resolveGrant=async(hash,{signal,beforeAccept}={})=>{
@@ -222,7 +251,7 @@ export async function createService({root,hostPackageRoot,dataDir=process.env.OR
   };
   const chooseVault=async(p,context)=>{
     noArgs(p);if(pickerBusy)fail('picker_busy','A escolha da pasta já está em andamento.');pickerBusy=true;pickerSignal=context.signal;
-    try{updates?.revoke();disconnectMemory();cancelExports();coordinator?.cancel();knowledge.cancel();const result=await vault.selectVault();return result?{name:basename(result.root)}:null;}finally{pickerSignal=null;pickerBusy=false;}
+    try{updates?.revoke();disconnectMemory();cancelExports();coordinator?.cancel();knowledge.cancel();await installationOperation.settled();const result=await vault.selectVault();if(result){installationRunID=null;await restoreExisting(context);}return result?{name:basename(result.root)}:null;}finally{pickerSignal=null;pickerBusy=false;}
   };
   const hostAction=async(context,work)=>{
     const generation=policy.snapshot().generation;
@@ -259,13 +288,13 @@ saveVersion:async(p,c)=>{if(Object.keys(p).some(key=>!['path','hash','text'].inc
       try{const ticket=policy.requireCapability('configure');await profileStore.update(value=>({...value,license:signed}),{beforeCommit:()=>policy.assertAdmission(ticket)});}catch(error){policy.revoke();vault.revoke();throw error;}
       const access=policy.snapshot();return {valid:access.active,role:access.role,capabilities:access.capabilities};
     },
-    revoke:async p=>{noArgs(p);disconnectMemory();cancelExports();coordinator?.cancel();knowledge.cancel();vault.revoke();return true;},
+    revoke:async p=>{noArgs(p);disconnectMemory();cancelExports();coordinator?.cancel();knowledge.cancel();await vault.forgetVault();return true;},
     memoryStatus:async p=>{noArgs(p);return knowledge.status();},
     memoryRefresh:async(p,context)=>{noArgs(p);cancelMemory();const result=await knowledge.refresh({signal:context.signal});if(connection)await prepareRelayBinding(context);return result;},
     prepareGBrain:async(p,context)=>{noArgs(p);cancelMemory();const result=await knowledge.refresh({signal:context.signal});if(connection)await prepareRelayBinding(context);return result;},
     gbrainRead:(p,context)=>knowledge.read(p,{signal:context.signal}),
     onboardingCancel:async p=>{noArgs(p);disconnectMemory();cancelExports();coordinator?.cancel();knowledge.cancel();return true;},
-    onboardingResume:async(p,context)=>{noArgs(p);if(installationAdmission)fail('onboarding_busy','A instalação já está em andamento.');if(coordinator){startInstallation('resume',context);return status();}fail('next_phase_unavailable','A instalação do acervo e do método ainda não está disponível. O índice local pode ser atualizado separadamente.');},
+    onboardingResume:async(p,context)=>{noArgs(p);if(installationAdmission)fail('onboarding_busy','A instalação já está em andamento.');if(coordinator){startInstallation(restorationRequested?'restore':'resume',context);return status();}fail('next_phase_unavailable','A instalação do acervo e do método ainda não está disponível. O índice local pode ser atualizado separadamente.');},
     onboardingInstallMemoryOnly:async(p,c)=>{
       if(Object.keys(p).some(key=>!['replaceLegacy','localMemoryPortability','maintenance'].includes(key))||p.replaceLegacy!==undefined&&typeof p.replaceLegacy!=='boolean')fail('invalid_request','Opções de instalação inválidas.');
       const consent=p.localMemoryPortability,selection=vault.status();
@@ -315,6 +344,10 @@ saveVersion:async(p,c)=>{if(Object.keys(p).some(key=>!['path','hash','text'].inc
     if(request.method==='snapshot'&&!policy.snapshot().active&&!policy.snapshot().blocked)return work();
     return policy.runAuthorized(['portableUpdateRequest','portableUpdateCancel','chooseVault','onboardingChooseVault','onboardingDraftUI','saveLayout','saveDepartments','saveVisualPreferences','saveLibraryRoot','prepareGBrain','memoryRefresh','onboardingInstallMemoryOnly','onboardingResume','onboardingCancel','onboardingContentPlan','onboardingContentInstall','onboardingContentResume','onboardingContentStatus','onboardingConnect','onboardingCheckConnection','onboardingCancelLogin','onboardingVerifyCodex'].includes(request.method)?'configure':'useOracle',async ticket=>{request.ticket=ticket;return work();});
   }});
+  if(policy.snapshot().active){
+    try{const selected=await vault.restoreVault();if(selected)await restoreExisting({ticket:policy.requireCapability('configure')});}
+    catch(error){vault.revoke();if(!['invalid_directory_bookmark','invalid_directory_path','directory_grant_stale','directory_grant_changed','directory_grant_unavailable','host_capability_unsupported','ENOENT','VAULT_ROOT_CHANGED','access_denied'].includes(error.code))throw error;}
+  }
   return {dispatcher,webRoot:join(resources,'web'),policy,vault,profileStore,capabilities,knowledge,coordinator,installationOperation,memoryTools,aiMemoryTools,memoryConsent,memoryWriteBroker,skillsRouting,capture,aiMemoryPhase:aiMemoryBackend?.phase,async close(){
     updates?.revoke();memoryWriteBroker.clearTransport();unsubscribeConnection?.();disconnectMemory();connection?.close();cancelExports();coordinator?.cancel();knowledge.cancel();vault.revoke();policy.block();
     try{await Promise.all([updates?.close(),installationOperation.settled(),knowledge.close(),memoryRelay?.close(),aiMemoryBackend?.close()]);}

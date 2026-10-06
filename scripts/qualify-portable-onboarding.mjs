@@ -9,6 +9,7 @@ const options=Object.fromEntries(process.argv.slice(2).reduce((rows,value,index,
 const root=resolve(options['--payload-root']||''),work=resolve('.work');
 if(!root.startsWith(work+'/')||await fs.realpath(root)!==root)throw Error('Isolated admitted payload root required');
 const {createService}=await import(pathToFileURL(join(root,'service.mjs')));
+const {createPlatformHostProviders}=await import(pathToFileURL(join(root,'platform-host-providers.mjs')));
 const base=join(work,'portable-onboarding-qualification');await fs.mkdir(base,{recursive:true});
 const scratch=await fs.mkdtemp(join(base,'synthetic-')),vault=join(scratch,'vault'),data=join(scratch,'private'),userHome=join(scratch,'user');
 await fs.mkdir(vault,{mode:0o700});await fs.mkdir(data,{mode:0o700});
@@ -21,11 +22,13 @@ const original=Buffer.from('interface:\n  display_name: Impeccable\n  short_desc
 await fs.mkdir(dirname(join(vault,metadata)),{recursive:true});await fs.writeFile(join(vault,metadata),original);
 await fs.mkdir(join(vault,'PESSOAL'));await fs.writeFile(join(vault,'PESSOAL/original.md'),'# Synthetic personal note\nKeep this original.\n');
 const pair=generateKeyPairSync('ed25519'),publicKey=pair.publicKey.export({type:'spki',format:'der'}).subarray(-32).toString('base64');
-const service=await createService({root,dataDir:data,codexUserHome:userHome,providers:{},selectionAdapter:{selectVault:async()=>({root:vault,explicitSelection:true})},codexConnectionFactory:()=>null,keys:{version:1,keys:{synthetic:publicKey}}});
+const platform=await createPlatformHostProviders();if(!platform.directoryBookmarks)throw Error('Actual macOS bookmark provider required');
+const service=await createService({root,dataDir:data,codexUserHome:userHome,providers:{...platform,chooseDirectory:async()=>({path:vault,authorization:'explicit-user-selection'})},codexConnectionFactory:()=>null,keys:{version:1,keys:{synthetic:publicKey}}});
 let monitor,deadline;
 try{
  const license=Buffer.from(JSON.stringify({version:3,product:'oracle-macos',keyID:'synthetic',licenseID:randomUUID(),subject:'Synthetic local installation qualification',issuedAt:Math.floor(Date.now()/1000)-1,role:'student',accessKeyHash:'b'.repeat(64)}));
- await service.policy.activate('ORACLE3.'+license.toString('base64url')+'.'+sign(null,Buffer.concat([Buffer.from('ORACLE3.'),license]),pair.privateKey).toString('base64url'));
+ const activation='ORACLE3.'+license.toString('base64url')+'.'+sign(null,Buffer.concat([Buffer.from('ORACLE3.'),license]),pair.privateKey).toString('base64url');await service.policy.activate(activation);
+ const ticket=service.policy.requireCapability('configure');await service.profileStore.update(profile=>({...profile,license:activation}),{beforeCommit:()=>service.policy.assertAdmission(ticket)});
  const dispatch=(method,params={})=>service.dispatcher.dispatch(method,params);
  await dispatch('onboardingChooseVault');const selected=await dispatch('onboardingStatus');
  await dispatch('onboardingInstallMemoryOnly',{localMemoryPortability:{schemaVersion:1,acknowledgment:'oracle_local_memory_portability_v1',vaultSelectionRevision:selected.vaultSelectionRevision},maintenance:{enabled:false,autoCapture:false,remoteProcessing:false,installOfficialHooks:false}});
@@ -44,6 +47,6 @@ try{
  const destination=join(userHome,'.agents/skills'),names=await fs.readdir(destination);
  if(!skills.items.length||names.length!==skills.items.length)throw Error('Packaged installer did not register the complete signed skills catalog');
  for(const item of skills.items){if(!names.includes(item.hostName)||await fs.realpath(join(destination,item.hostName,'SKILL.md'))!==join(vault,item.entry))throw Error('Registered skill readback diverged');}
- const report={passed:true,scope:'Actual packaged local installation with previous public skill metadata and legacy Codex workspace',signedCorpus:true,realGBrainIndex:true,realAIMemoryRuntime:true,metadataUpdated:true,originalBackupVerified:true,personalFixturePreserved:true,legacyCodexWorkspacePreserved:true,registeredSkills:skills.items.length,registrationVerified:true,codexDiscoveryVerified:false,userHome,vault,installationCompleted:state.installationCompleted,syntheticLicense:true,syntheticFolderSelection:true,personalProfileUsed:false,hooksRequested:false,codexConnectionRequested:false,maintenanceRequested:false};
+ const report={passed:true,scope:'Actual packaged local installation with previous public skill metadata and legacy Codex workspace',signedCorpus:true,realGBrainIndex:true,realAIMemoryRuntime:true,actualOSBookmark:true,metadataUpdated:true,originalBackupVerified:true,personalFixturePreserved:true,legacyCodexWorkspacePreserved:true,registeredSkills:skills.items.length,registrationVerified:true,codexDiscoveryVerified:false,dataDir:data,userHome,vault,installationCompleted:state.installationCompleted,syntheticLicense:true,syntheticFolderSelection:true,personalProfileUsed:false,hooksRequested:false,codexConnectionRequested:false,maintenanceRequested:false};
  await fs.writeFile(join(scratch,'report.json'),JSON.stringify(report,null,2)+'\n');process.stdout.write(JSON.stringify({report:join(scratch,'report.json'),...report})+'\n');
 }finally{clearInterval(monitor);clearTimeout(deadline);await service.close();}

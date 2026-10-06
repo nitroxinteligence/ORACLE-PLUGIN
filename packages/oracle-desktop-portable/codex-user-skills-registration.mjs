@@ -80,5 +80,23 @@ export function createCodexUserSkillsRegistration({policy,vault,userHome=homedir
    throw error;
   }
  }
- return options=>{const task=queue.then(()=>register(options));queue=task.catch(()=>{});return task;};
+ const registration=options=>{const task=queue.then(()=>register(options));queue=task.catch(()=>{});return task;};
+ // The restore coordinator already verified the complete signed vault corpus.
+ // Check every host link and its signed entrypoint without copying the corpus
+ // or rebuilding an immutable Codex workspace on every conversation.
+ registration.verifyExisting=async({admitted,ticket,signal,check=()=>{}}={})=>{
+  assertSkillsRelease(admitted);const selected=vault.status(),destination=join(userHome,'.agents','skills');
+  const guard=()=>{policy.assertAdmission(ticket);check();const current=vault.status();if(ticket.capability!=='configure'||signal?.aborted||!current.selected||current.root!==selected.root||current.generation!==selected.generation)fail('codex_skills_registration_changed','A autorização ou a pasta mudou.');};
+  guard();await policy.revalidateAdmission(ticket);guard();
+  for(const directory of [userHome,join(userHome,'.agents'),destination]){const entry=await fs.lstat(directory);if(entry.isSymbolicLink()||!entry.isDirectory()||await fs.realpath(directory)!==directory)fail('codex_skills_path_collision','A pasta de skills foi redirecionada.');guard();}
+  for(const item of admitted.items){
+   const link=join(destination,item.hostName),source=join(selected.root,dirname(item.entry)),entry=join(selected.root,item.entry);
+   if(!(await fs.lstat(link)).isSymbolicLink()||await fs.realpath(link)!==source||await fs.realpath(join(link,'SKILL.md'))!==entry)fail('codex_skills_registration_conflict','Um registro de skill pertence a outra pasta. O original foi preservado.');
+   let cursor=selected.root;for(const part of item.entry.split('/').slice(0,-1)){cursor=join(cursor,part);const info=await fs.lstat(cursor);if(info.isSymbolicLink()||!info.isDirectory())fail('codex_skills_source_changed','O caminho da skill mudou.');guard();}
+   const handle=await fs.open(entry,constants.O_RDONLY|constants.O_NOFOLLOW|constants.O_NONBLOCK);
+   try{const before=await handle.stat();if(!before.isFile()||before.nlink!==1||before.size>32000000)fail('codex_skills_source_changed','Arquivo irregular na skill.');const bytes=await handle.readFile();if(stable(before)!==stable(await handle.stat())||stable(before)!==stable(await fs.lstat(entry)))fail('codex_skills_source_changed','A skill mudou durante a verificação.');verifySkillsFile(admitted,item.entry,bytes);guard();}finally{await handle.close();}
+  }
+  return Object.freeze({registered:admitted.items.length,created:0,skippedPreserved:0,complete:true,destination,releaseID:admitted.releaseID,registrationVerified:true,discoveryVerified:false,modelExecutionVerified:false});
+ };
+ return registration;
 }

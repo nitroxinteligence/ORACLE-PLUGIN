@@ -41,7 +41,7 @@ export function createPortableContentSource({bundleRoot,dataDir,profileStore,pol
   try{let url=packageInfo.url,response;for(let redirect=0;redirect<=4;redirect++){check(ticket,signal);const address=new URL(url);if(address.protocol!=='https:'||address.username||address.password||address.hash||!['github.com','release-assets.githubusercontent.com','objects.githubusercontent.com'].includes(address.hostname))fail('invalid_distribution_url','Redirecionamento fora da origem aprovada.');response=await fetchImpl(url,{redirect:'manual',signal:controller.signal,cache:'no-store'});check(ticket,signal);if(![301,302,303,307,308].includes(response.status))break;await response.body?.cancel();url=new URL(response.headers.get('location'),url).href;response=null;}
    if(!response?.ok||!response.body)fail('content_download_failed','O pacote do acervo não foi disponibilizado.');reader=response.body.getReader();const chunks=[];let size=0;for(;;){const row=await reader.read();check(ticket,signal);if(row.done)break;size+=row.value.length;if(size>packageInfo.bytes)fail('content_download_limit','Pacote excedeu seu tamanho assinado.');chunks.push(Buffer.from(row.value));}const bytes=Buffer.concat(chunks,size);if(size!==packageInfo.bytes||sha(bytes)!==packageInfo.sha256)fail('content_file_changed','Pacote não corresponde à assinatura.');return bytes;
   }catch(error){if(signal?.aborted)fail('operation_cancelled','Instalação cancelada.');if(controller.signal.aborted)fail('content_download_timeout','O acervo não respondeu a tempo.');throw error;}finally{clearTimeout(timer);signal?.removeEventListener('abort',abort);await reader?.cancel().catch(()=>{});}}
- return async function sourceProvider({ticket,signal}={}){
+ const sourceProvider=async function({ticket,signal}={}){
   if(busy)fail('content_download_busy','Conteúdo em preparação.');busy=true;let stage;
   try{await policy.revalidateAdmission(ticket);check(ticket,signal);let envelope;try{envelope=await readBounded(envelopePath,24000000);}catch(error){if(error.code==='ENOENT')fail('distribution_unavailable','Envelope privado portable-content-v1 não acompanha esta distribuição.');throw error;}
    const profile=await profileStore.load();check(ticket,signal);const prior=profile.portableContentFeed??{};const admitted=verifyPortableContentManifest(envelope,{trust,minimumSequence:prior.sequence??0,knownManifestSHA256:prior.manifestSHA256});
@@ -60,4 +60,15 @@ export function createPortableContentSource({bundleRoot,dataDir,profileStore,pol
    return Object.freeze({admitted,skills,payloadRoot:stage,source:Object.freeze({fixture:false,completeInventory:false,completeInstallationPlan:true,catalogReleaseID:transport.releaseID,portableReleaseID:admitted.manifest.release_id,installed:false})});
   }catch(error){if(stage)await fs.rm(stage,{recursive:true,force:true});throw error;}finally{busy=false;}
  };
+ // Restore admits the fixed signed package again and supplies only reference
+ // assets. It does not download, stage, copy, install or restore journal trust.
+ sourceProvider.verifyInstalled=async({ticket,signal}={})=>{
+  await policy.revalidateAdmission(ticket);check(ticket,signal);
+  const envelope=await readBounded(envelopePath,24000000),profile=await profileStore.load();check(ticket,signal);
+  const prior=profile.portableContentFeed??{},admitted=verifyPortableContentManifest(envelope,{trust,minimumSequence:prior.sequence??0,knownManifestSHA256:prior.manifestSHA256});
+  for(const row of admitted.manifest.files.filter(row=>!row.path.startsWith('content/'))){check(ticket,signal);loadAdmittedContentFile(admitted,row.path,bundleRoot);}
+  const provenance=loadAdmittedContentFile(admitted,catalogPath,bundleRoot),skills=admitSkillsRelease(provenance,{trust});catalogTransport(provenance,trust,admitted);check(ticket,signal);
+  return Object.freeze({admitted,skills,payloadRoot:bundleRoot,source:Object.freeze({installedReadback:true})});
+ };
+ return sourceProvider;
 }

@@ -52,6 +52,11 @@ function checkedBytes(target, limit) {
     return bytes;
   } finally { closeSync(fd); }
 }
+function existingPathUnder(root,relative,check){
+ directory(root);let target=root;
+ for(const part of relative.split('/').slice(0,-1)){check();target=join(target,part);directory(target);}
+ return join(target,relative.split('/').at(-1));
+}
 
 /** Composition-only API. Requires a real vault.withContentTransaction grant and
  * real policy tickets. Journal is advisory private profile state, never authority.
@@ -65,6 +70,21 @@ export function createVaultContentTransaction({ vault, policy, profileStore, dat
   if (!vault?.withContentTransaction || !policy?.requireCapability || !policy?.assertAdmission || !policy?.revalidateAdmission || !profileStore?.update) fail('content_transaction_provider_required');
   if (typeof dataDir !== 'string' || resolve(dataDir)!==dataDir) fail('private_content_root_required');
   return Object.freeze({
+    verify(plan,{signal}={}){
+      const admitted=admittedManifestForPlan(plan),ticket=policy.requireCapability('configure');
+      return vault.withContentReadScope(async grant=>{
+        const check=()=>{grant.check();policy.assertAdmission(ticket);if(signal?.aborted)fail('content_install_cancelled');};
+        await grant.checkRoot();check();const methodRoot=join(dataDir,'installed-method',plan.manifestSHA256);directory(methodRoot);
+        for(const [index,entry] of plan.entries.entries()){
+          check();const base=entry.scope==='vault'?grant.root:methodRoot;
+          let target;try{target=existingPathUnder(base,entry.destination,check);const parent=directory(dirname(target));verifyContentFile(admitted,entry.source,checkedBytes(target,entry.bytes));if(!same(parent,directory(dirname(target))))fail('content_parent_changed');}
+          catch(error){if(error.code==='ENOENT')throw Object.assign(new Error('Um arquivo da instalação está ausente: '+entry.destination+'. Os arquivos existentes foram preservados.'),{code:'content_installation_missing',path:entry.destination});if(['content_existing_conflict','content_path_collision','content_file_changed'].includes(error.code))throw Object.assign(new Error('Um arquivo da instalação foi alterado: '+entry.destination+'. Seu arquivo foi preservado; revise-o antes de reparar a instalação.'),{code:'content_existing_conflict',path:entry.destination});throw error;}
+          if(index%32===0){await new Promise(resolve=>setImmediate(resolve));await grant.checkRoot();check();}
+        }
+        await grant.checkRoot();check();await policy.revalidateAdmission(ticket);check();
+        return {completed:true,state:'verified-existing',manifestSHA256:plan.manifestSHA256,filesVerified:plan.entries.length,methodRoot,filesCreated:0};
+      },{signal});
+    },
     install(plan, { payloadRoot, signal } = {}) {
       const admitted = admittedManifestForPlan(plan), ticket = policy.requireCapability('configure');
       return vault.withContentTransaction(async grant => {

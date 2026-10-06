@@ -1,9 +1,10 @@
 import fs from 'node:fs/promises';
-import {existsSync} from 'node:fs';
+import {existsSync,constants} from 'node:fs';
 import {createHash,randomUUID} from 'node:crypto';
 import {join,resolve} from 'node:path';
 import {assertPrivatePath} from './profile-store.mjs';
 import {createGBrainSourceRunner,GBRAIN_SOURCE_PIN} from './gbrain-source-runner.mjs';
+import {waitForProfileLock} from './profile-write-lock.mjs';
 
 const fail=(code,message)=>{throw Object.assign(new Error(message),{code});};
 const digest=value=>createHash('sha256').update(JSON.stringify(value)).digest('hex');
@@ -11,7 +12,7 @@ const absent=()=>({state:'unavailable',indexing:false,error:'Prepare o índice l
 
 // Runtime locations are trusted package/composition inputs. No RPC may select a
 // runtime, profile, CLI argument, database, model, endpoint or source directory.
-export function createKnowledgeService({policy,vault,profileStore,dataDir,runtimeConfig}={}) {
+export function createKnowledgeService({policy,vault,profileStore,dataDir,runtimeConfig,acquireLock}={}) {
   let queue=Promise.resolve(),epoch=0,running=false,latest=null,pending=0;
   const controllers=new Set();
   const selection=()=>{const value=vault.status();if(!value.selected)fail('vault_required','Escolha seu Obsidian antes de preparar o índice.');return value;};
@@ -37,16 +38,22 @@ export function createKnowledgeService({policy,vault,profileStore,dataDir,runtim
     const task=queue.then(async()=>{
       check();await policy.revalidateAdmission(ticket);check();running=true;
       const timer=setInterval(()=>{try{check();}catch{controller.abort();}},50);timer.unref?.();
-      let lock,lockIdentity;
+      let lock,lockIdentity,release;
       try{
         if(!runtimeConfig)fail('engine_unavailable','Os componentes de busca local não estão disponíveis nesta instalação.');
         const stateRoot=join(dataDir,'knowledge',digest(selected.root));
         for(const relative of ['','gbrain/profile','gbrain/workspace','events','execution-home','tmp'])await privateDirectory(join(stateRoot,relative),check);
-        // All reads also open PGLite, so one queue and a process lock cover the
-        // complete engine session. Never break a stale lock automatically.
+        // The pinned upstream kernel lease serializes conversations and is
+        // released by the OS after a crash. Old O_EXCL locks stay protected.
         const lockPath=join(stateRoot,'operation.lock');
-        try{lock=await fs.open(lockPath,'wx',0o600);}catch(error){if(error.code==='EEXIST')fail('engine_busy','Outro processo está usando o índice local. Aguarde antes de tentar novamente.');throw error;}
-        await lock.writeFile(JSON.stringify({pid:process.pid,runID:randomUUID()}));lockIdentity=await lock.stat();check();
+        if(acquireLock){
+          if(existsSync(lockPath))fail('engine_busy','Outra versão está usando o índice local. Encerre essa conversa antes de retomar.');
+          const kernelPath=join(stateRoot,'operation.kernel.lock');try{await assertPrivatePath(kernelPath);const info=await fs.lstat(kernelPath);if(!info.isFile()||info.nlink!==1)fail('profile_invalid','Trava local inválida.');}catch(error){if(error.code!=='ENOENT')throw error;}
+          release=await waitForProfileLock(acquireLock,kernelPath,{signal:controller.signal,check});check();
+        }else{
+          try{lock=await fs.open(lockPath,'wx',0o600);}catch(error){if(error.code==='EEXIST')fail('engine_busy','Outro processo está usando o índice local. Aguarde antes de tentar novamente.');throw error;}
+          await lock.writeFile(JSON.stringify({pid:process.pid,runID:randomUUID()}));lockIdentity=await lock.stat();check();
+        }
         const bunConfig=join(stateRoot,'bunfig.toml');await atomicFile(bunConfig,'# Oracle isolated runtime: no preloads or providers\n',check);
         const runner=createGBrainSourceRunner({...runtimeConfig,stateRoot,vaultRoot:selected.root,bunConfig});
         const context={selected,ticket,check,signal:controller.signal,runner,stateRoot};
@@ -58,6 +65,7 @@ export function createKnowledgeService({policy,vault,profileStore,dataDir,runtim
         fail('engine_operation_failed','Não foi possível concluir a operação de busca local. Os arquivos originais foram preservados.');
       }finally{
         clearInterval(timer);running=false;
+        await release?.();
         if(lock){const lockPath=join(dataDir,'knowledge',digest(selected.root),'operation.lock');try{const current=await fs.lstat(lockPath);if(lockIdentity&&current.dev===lockIdentity.dev&&current.ino===lockIdentity.ino&&!current.isSymbolicLink())await fs.unlink(lockPath);}catch(error){if(error.code!=='ENOENT')throw error;}finally{await lock.close();}}
       }
     });
@@ -98,6 +106,26 @@ export function createKnowledgeService({policy,vault,profileStore,dataDir,runtim
       return {state:complete?'current':'partial',indexing:false,complete,verified_at:receipt.verifiedAt,index:indexed,inference:false,installationCompleted:false};
     },{...options,capability:'configure'});
   }
+  async function verifyExisting(options={}){
+    return run(async context=>{
+      const {runner,selected,ticket,check,signal}=context,marker=join(runner.profile,'oracle-owned.json');
+      await assertPrivatePath(marker);const owner=JSON.parse(await fs.readFile(marker,'utf8'));check();
+      if(owner.owner!=='OracleCompanion'||owner.schema_version!==2||owner.vault_root!==selected.root)fail('engine_target_changed','O índice pertence a outra pasta.');
+      const manifestPath=join(runner.profile,'oracle-vault-manifest.json');await assertPrivatePath(manifestPath);check();
+      const handle=await fs.open(manifestPath,constants.O_RDONLY|constants.O_NOFOLLOW);let manifest;
+      try{const info=await handle.stat();if(!info.isFile()||info.nlink!==1||info.size>16000000)fail('profile_invalid','Manifesto do índice inválido.');manifest=JSON.parse(await handle.readFile('utf8'));}finally{await handle.close();}
+      check();const engine=(await runner.read({operation:'status'},{signal})).value;check();
+      if(engine.commit!==GBRAIN_SOURCE_PIN||engine.inference!==false)fail('engine_policy_changed','A configuração da busca local precisa de revisão.');
+      const scan=await vault.scan({force:true});check();if(!scan.complete)fail('scan_partial','A leitura da pasta está parcial. Os arquivos foram preservados.');
+      const notes=scan.notes.filter(row=>!/^INBOX\/oracle-memory(?:\/|$)/i.test(row.path));
+      const records=Array.isArray(manifest.records)?manifest.records:[],expected=new Map(records.map(row=>[row.path,row.sha256]));
+      const complete=manifest.complete===true&&manifest.root===selected.root&&expected.size===records.length&&notes.length===expected.size&&notes.every(row=>expected.get(row.path)===row.revision)&&engine.index?.complete===true;
+      if(!complete)return {state:'stale',complete:false,indexing:false,inference:false};
+      const receipt={schemaVersion:1,runID:randomUUID(),sourcePin:GBRAIN_SOURCE_PIN,runtimeSHA256:runtimeConfig.runtimeSHA256,vaultRoot:selected.root,vaultGeneration:selected.generation,policyGeneration:ticket.generation,admissionCapability:ticket.capability,verifiedAt:new Date().toISOString(),indexComplete:true,index:engine.index,scanSignature:scanSignature(scan),engineVersion:engine.version,inference:false,installationCompleted:false};
+      await profileStore.update(value=>({...value,knowledgeReceipt:receipt}),{beforeCommit:check});check();latest=receipt;
+      return {state:'current',complete:true,indexing:false,index:engine.index,inference:false};
+    },{...options,capability:'configure'});
+  }
   async function read(params,options={}) {
     if(!params||Object.keys(params).some(key=>!['operation','source','slug','query'].includes(key))||!['status','search','get','graph','list'].includes(params.operation))fail('invalid_request','Consulta de memória inválida.');
     if(params.operation!=='status'&&(!['oracle-vault','oracle-memory'].includes(params.source)||['get','graph'].includes(params.operation)&&(typeof params.slug!=='string'||!params.slug||params.slug.length>1024)||params.operation==='search'&&(typeof params.query!=='string'||!params.query.trim()||params.query.length>500)))fail('invalid_request','Escolha uma biblioteca e uma consulta válida.');
@@ -120,5 +148,5 @@ export function createKnowledgeService({policy,vault,profileStore,dataDir,runtim
     const selected=vault.status();if(!policy.snapshot().active||!selected.selected||!latest||latest.vaultRoot!==selected.root||latest.vaultGeneration!==selected.generation)return {status:'unconfigured',running,inference:false};
     return {status:latest.indexComplete?'verified':'partial',stale:true,freshness:'unverified',running,inference:false,verified_at:latest.verifiedAt,index:latest.index,installationCompleted:false};
   }
-  return Object.freeze({refresh,read,status,syncSnapshot,cancel,async close(){cancel();await queue;}});
+  return Object.freeze({refresh,verifyExisting,read,status,syncSnapshot,cancel,async close(){cancel();await queue;}});
 }

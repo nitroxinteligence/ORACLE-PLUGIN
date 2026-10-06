@@ -2,6 +2,7 @@ import {getAIMemoryRuntimeContext} from './ai-memory-runtime.mjs';
 import * as serviceReceipts from './ai-memory-service.mjs';
 import {assertAIMemoryMirrorReceipt} from './ai-memory-vault-mirror.mjs';
 import {AI_MEMORY_PINS} from './ai-memory-pins.mjs';
+import {verifyAIMemoryInstallation,assertAIMemoryInstallationReceipt} from './ai-memory-installation-verifier.mjs';
 const fail=code=>{throw Object.assign(new Error(code),{code});};
 const receipts=new WeakMap();
 export function assertOnboardingAIMemoryReceipt(receipt){const state=receipts.get(receipt);if(!state)fail('ai_memory_phase_unverified');state.check();return receipt;}
@@ -17,10 +18,20 @@ export function createOnboardingAIMemory({policy,vault,profileStore,createBacken
  serviceReceiptCurrentVerifier=(receipt,options)=>{if(typeof serviceReceipts.assertAIMemoryServiceReceiptCurrent!=='function')fail('ai_memory_service_receipt_unavailable');return serviceReceipts.assertAIMemoryServiceReceiptCurrent(receipt,options);},
  mirrorReceiptVerifier=assertAIMemoryMirrorReceipt}={}){
  if(!policy||!vault||!profileStore||typeof createBackend!=='function')fail('ai_memory_phase_unavailable');
- let epoch=0,busy=false,controller=null,backend=null,proof=null,phase='pending';
- const cancel=()=>{epoch++;controller?.abort();backend?.service?.cancel();proof=null;phase='cancelled';};
- const status=()=>{try{if(proof)assertOnboardingAIMemoryReceipt(proof);}catch{proof=null;phase='pending';}return Object.freeze({phase,verified:!!proof,receipt:proof,portability:proof?.portability??'pending',running:busy,completed:false,captureEnabled:false,hooksTrusted:false,codexConnected:false});};
+ let epoch=0,busy=false,controller=null,backend=null,proof=null,installation=null,phase='pending';
+ const cancel=()=>{epoch++;controller?.abort();backend?.service?.cancel();proof=null;installation=null;phase='cancelled';};
+ const status=()=>{try{if(proof)assertOnboardingAIMemoryReceipt(proof);}catch{proof=null;phase='pending';}try{if(installation)assertAIMemoryInstallationReceipt(installation);}catch{installation=null;}return Object.freeze({phase,verified:!!proof,receipt:proof,installationVerified:!!installation,installationReceipt:installation,portability:proof?.portability??'pending',running:busy,completed:false,captureEnabled:false,hooksTrusted:false,codexConnected:false});};
  return Object.freeze({status,cancel,async close(){cancel();await backend?.service?.close?.();},
+  async verifyInstallation({ticket,planHash,signal}={}){
+   if(busy)fail('ai_memory_busy');if(!/^[a-f0-9]{64}$/.test(planHash??''))fail('ai_memory_binding_invalid');
+   const selected=vault.status(),expected=epoch,local=new AbortController(),abort=()=>local.abort();if(!selected.selected)fail('vault_required');signal?.addEventListener('abort',abort,{once:true});if(signal?.aborted)abort();controller=local;busy=true;installation=null;
+   const check=()=>{policy.assertAdmission(ticket);const current=vault.status();if(ticket.capability!=='configure'||expected!==epoch||local.signal.aborted||!current.selected||current.root!==selected.root||current.generation!==selected.generation)fail('ai_memory_binding_changed');};
+   try{check();await policy.revalidateAdmission(ticket);check();
+    backend=await createBackend({ticket,binding:Object.freeze({vault:selected.root,selectionRevision:String(selected.generation),planHash,setupAuthorized:true}),signal:local.signal,restoreOnly:true});check();
+    const context=runtimeContextProvider(backend.runtime);context.assertCurrent(ticket);if(context.binding.planHash!==planHash)fail('ai_memory_binding_invalid');
+    installation=await verifyAIMemoryInstallation({backend,ticket,signal:local.signal,check});check();phase='installed';return assertAIMemoryInstallationReceipt(installation);
+   }finally{busy=false;if(controller===local)controller=null;signal?.removeEventListener('abort',abort);}
+  },
   async prepare({ticket,planHash,signal}={}){
    if(busy)fail('ai_memory_busy');if(!/^[a-f0-9]{64}$/.test(planHash??''))fail('ai_memory_binding_invalid');
    const selected=vault.status();if(!selected.selected)fail('vault_required');

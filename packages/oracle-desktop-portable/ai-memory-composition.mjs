@@ -26,7 +26,7 @@ export function createAIMemoryComposition({bundleRoot,dataDir,policy,vault,profi
  const liveBinding=()=>{const binding=currentBinding(),selection=vault.status();if(!selection?.selected||binding?.vault!==selection.root||binding?.selectionRevision!==String(selection.generation))fail('ai_memory_binding_changed','O vínculo não corresponde ao vault selecionado.');return binding;};
  let backend=null,creating=false,closed=false,stopping=Promise.resolve();
  return Object.freeze({
-  async createBackend({ticket,binding,signal}={}){
+  async createBackend({ticket,binding,signal,restoreOnly=false}={}){
    if(closed)fail('ai_memory_composition_closed','Composição encerrada.');if(creating)fail('ai_memory_busy','Composição em preparação.');creating=true;
    try{
     await stopping;if(closed)fail('ai_memory_composition_closed','Composição encerrada.');
@@ -34,13 +34,17 @@ export function createAIMemoryComposition({bundleRoot,dataDir,policy,vault,profi
     if(binding&&['vault','selectionRevision','planHash','setupAuthorized'].some(key=>binding[key]!==current[key])||binding?.consentGeneration!==undefined&&binding.consentGeneration!==current.consentGeneration)fail('ai_memory_binding_changed','O plano recebido não corresponde à autorização atual.');
     if(backend){getAIMemoryRuntimeContext(backend.runtime).assertCurrent(ticket);return backend;}
     verifyAssets();if(signal?.aborted)fail('operation_cancelled','Operação cancelada.');
-    let installationID;await profileStore.update(profile=>{const existing=profile.aiMemoryInstallation;if(existing&&(existing.owner!=='oracle-portable-ai-memory-composition'||!/^[0-9a-f-]{36}$/i.test(existing.installationID??'')))fail('ai_memory_profile_unowned','Identidade própria inválida.');installationID=existing?.installationID??randomUUID();return {...profile,aiMemoryInstallation:{owner:'oracle-portable-ai-memory-composition',installationID}};},{beforeCommit:()=>{policy.assertAdmission(ticket);assertBinding();}});canonical(dataDir);
-    assertBinding();const runtime=await createAIMemoryRuntime({binary,profileRoot:join(dataDir,'ai-memory'),installationID,policy,currentBinding:liveBinding}).admit({ticket,signal});
+    let installationID;
+    const admitIdentity=profile=>{const existing=profile.aiMemoryInstallation;if(existing&&(existing.owner!=='oracle-portable-ai-memory-composition'||!/^[0-9a-f-]{36}$/i.test(existing.installationID??'')))fail('ai_memory_profile_unowned','Identidade própria inválida.');if(restoreOnly&&!existing)fail('ai_memory_installation_missing','A instalação da memória local está ausente.');installationID=existing?.installationID??randomUUID();return {...profile,aiMemoryInstallation:{owner:'oracle-portable-ai-memory-composition',installationID}};};
+    if(restoreOnly){admitIdentity(await profileStore.load());policy.assertAdmission(ticket);assertBinding();}
+    else await profileStore.update(admitIdentity,{beforeCommit:()=>{policy.assertAdmission(ticket);assertBinding();}});canonical(dataDir);
+    assertBinding();const runtime=await createAIMemoryRuntime({binary,profileRoot:join(dataDir,'ai-memory'),installationID,policy,currentBinding:liveBinding}).admit({ticket,signal,restoreOnly});
     assertBinding();const process=createAIMemoryProcess({runtime}),rawService=createAIMemoryService({runtime,process});let serviceOpen=true;const preparations=new Set();const ensureService=()=>{if(!serviceOpen)fail('ai_memory_service_closed','Prepare uma nova instância da memória.');};const retire=()=>{if(!serviceOpen)return stopping;serviceOpen=false;if(backend?.runtime===runtime)backend=null;stopping=(async()=>{await rawService.close();await Promise.allSettled([...preparations]);})();return stopping;};const service=Object.freeze({prepare(options){ensureService();const operation=rawService.prepare(options);preparations.add(operation);operation.finally(()=>preparations.delete(operation)).catch(()=>{});return operation;},assertReady(){ensureService();return rawService.assertReady();},invoke(name,input,options){ensureService();return rawService.invoke(name,input,options);},cancel(){if(serviceOpen){rawService.cancel();retire().catch(()=>{});}},close:retire});registerAIMemoryServiceDelegate(rawService,service);const snapshotReader=createAIMemorySnapshotReader({runtime,schemaPath}),mirror=createAIMemoryVaultMirror({vault,policy,profileStore,dataDir});
     let port;do{port=await allocatePort(signal);}while([49374,49375].includes(port));verifyAssets();assertBinding();getAIMemoryRuntimeContext(runtime).assertCurrent(ticket);if(closed)fail('ai_memory_composition_closed','Composição encerrada.');
     const writeAuthorization=verifyExplicitRequest?createAIMemoryWriteAuthorization({verifyExplicitRequest,currentBinding:liveBinding}):undefined;
     const relay=relayAuthorization&&portabilityAuthorization?createAIMemoryRelay({policy,vault,relayAuthorization,portabilityAuthorization,writeAuthorization,service,snapshotReader,mirror}):null;
     backend=Object.freeze({runtime,service,port,snapshotReader,mirror,portabilityAuthorization,writeAuthorization,
+     verifyInstallationProfile:options=>process.verifyInstallationProfile(options),assertPreparedProfile:ticket=>process.assertPreparedProfile(ticket),
      tools(options){if(!relay)fail('ai_memory_authorization_unavailable','Conexão e consentimento de portabilidade exigidos.');return relay.tools(options);},
      invoke(name,input,options){if(!relay)fail('ai_memory_authorization_unavailable','Conexão e consentimento de portabilidade exigidos.');return relay.invoke(name,input,options);},
      prepare(options){return service.prepare({...options,port});},

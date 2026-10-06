@@ -10,7 +10,8 @@ const same = (a, b) => a.dev === b.dev && a.ino === b.ino;
 /** Backend API: createVaultService({selectionAdapter,profileStore}).
  * selectionAdapter.selectVault() is trusted host code, never an RPC/UI path argument.
  * It returns {root,explicitSelection:true} after an explicit folder selection.
- * selectVault() alone admits a grant. Persisted JSON cannot restore authorization.
+ * A fresh picker or verified OS bookmark lease admits a grant. Paths/JSON alone
+ * cannot restore authorization. Leases end on selection change or revocation.
  * All paths are relative Markdown paths. readNote returns {path,content,revision}.
  * saveNote({path,content,expectedRevision}) returns saved/conflict and retains drafts.
  * prepareMemoryDirectory({signal}?) is trusted composition only, never an RPC
@@ -71,7 +72,7 @@ export function createVaultService({ selectionAdapter, profileStore, admission, 
     if (ticket?.then) fail('ASYNC_COMMIT_ADMISSION_UNSUPPORTED');
     policyCheck(ticket); return { ...grant, generation, ticket };
   };
-  const check = token => { if (!grant || token.generation !== generation || token.root !== grant.root) fail('VAULT_REVOKED'); policyCheck(token.ticket); };
+  const check = token => { if (!grant || token.generation !== generation || token.root !== grant.root) fail('VAULT_REVOKED'); grant.lease?.assertActive(); policyCheck(token.ticket); };
   async function checkedRoot(token) {
     check(token);
     const nativeIdentity = nativeInspect(token.root,()=>check(token));
@@ -263,6 +264,21 @@ export function createVaultService({ selectionAdapter, profileStore, admission, 
         } finally { active = false; if(mutates)invalidateInventory(); }
       });
     };
+  async function select(restore=false){
+    const start=generation,ticket=admission?.createAdmissionTicket();policyCheck(ticket);
+    let selection;
+    const verify=()=>{if(start!==generation)fail('VAULT_REVOKED');policyCheck(ticket);selection?.lease?.assertActive();};
+    try{
+      selection=restore?await selectionAdapter.restoreVault?.():await selectionAdapter.selectVault();verify();
+      if(selection==null)return null;
+      if(!path.isAbsolute(selection.root??'')||(restore?(selection?.persistentSelection!==true||typeof selection?.lease?.assertActive!=='function'):(selection?.explicitSelection!==true)))fail('EXPLICIT_SELECTION_REQUIRED');
+      const nativeIdentity=nativeInspect(selection.root,verify);if(nativeIdentity&&!nativeIdentity.directory)fail('VAULT_DIRECTORY_REQUIRED');
+      const root=await fs.realpath(selection.root),identity=await fs.lstat(root);verify();if(!identity.isDirectory())fail('VAULT_DIRECTORY_REQUIRED');
+      if(selection.lease&&selection.lease.path!==root)fail('VAULT_ROOT_CHANGED');
+      await selectionAdapter.commitSelection?.(selection,{root,identity,check:verify});verify();
+      grant?.lease?.release();generation++;grant={root,identity,nativeIdentity,lease:selection.lease};invalidateInventory();return {selected:true,generation,root,restored:restore};
+    }catch(error){selection?.lease?.release();throw error;}
+  }
   return {
     // Trusted composition only, never an RPC operation. A persisted root is not
     // a grant. The callback owns no authority after selection/policy revocation.
@@ -271,22 +287,10 @@ export function createVaultService({ selectionAdapter, profileStore, admission, 
     // guards without invalidating a concurrent inventory of unchanged files.
     withContentReadScope: (callback, options) => contentScope(callback, options, false),
     status: () => ({ selected: !!grant, generation, root: grant?.root ?? null }),
-    revoke: () => { generation++; grant = null; invalidateInventory(); return { selected: false, generation }; },
-    selectVault: async () => {
-      const start = generation;
-      const selection = await selectionAdapter.selectVault();
-      if (start !== generation) fail('VAULT_REVOKED');
-      if (selection === null) return null;
-      if (!selection || selection.explicitSelection !== true || !path.isAbsolute(selection.root ?? '')) fail('EXPLICIT_SELECTION_REQUIRED');
-      const nativeIdentity=nativeInspect(selection.root,()=>{if(start!==generation)fail('VAULT_REVOKED');});
-      if(nativeIdentity&&!nativeIdentity.directory)fail('VAULT_DIRECTORY_REQUIRED');
-      const root = await fs.realpath(selection.root);
-      const identity = await fs.lstat(root);
-      if (!identity.isDirectory()) fail('VAULT_DIRECTORY_REQUIRED');
-      if (start !== generation) fail('VAULT_REVOKED');
-      generation++; grant = { root, identity, nativeIdentity }; invalidateInventory();
-      return { selected: true, generation, root };
-    },
+    revoke: () => { generation++;grant?.lease?.release(); grant = null; invalidateInventory(); return { selected: false, generation }; },
+    selectVault:()=>select(false),
+    restoreVault:()=>select(true),
+    forgetVault:async()=>{generation++;grant?.lease?.release();grant=null;invalidateInventory();await selectionAdapter.forgetSelection?.();return {selected:false,generation};},
     prepareMemoryDirectory: (options = {}) => {
       if (!options || typeof options !== 'object' || Object.keys(options).some(key => key !== 'signal')) fail('INVALID_MEMORY_PREPARATION');
       if (!admission) fail('LICENSE_ADMISSION_REQUIRED');

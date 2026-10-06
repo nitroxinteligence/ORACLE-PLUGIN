@@ -3,6 +3,7 @@ import {runIndexCheckpoints} from './index-checkpoint-runner.mjs';
 import {createContentInstallationPlan} from './content-installation-plan.mjs';
 import {createVaultContentTransaction} from './vault-content-transaction.mjs';
 import {verifyGBrainMethodInstallation,assertVerifiedGBrainMethod} from './method-installation-verifier.mjs';
+import {assertAIMemoryInstallationReceipt} from './ai-memory-installation-verifier.mjs';
 const fail=code=>{throw Object.assign(new Error(code),{code});};
 // Resolve the public phase against current proof, independently of journal text.
 export const onboardingCoordinatorPhaseStatus=(phase,aiMemoryVerified)=>phase==='ai_memory_verified'&&!aiMemoryVerified?'ai_memory_pending':phase;
@@ -25,14 +26,15 @@ export function createOnboardingCoordinator({policy,vault,profileStore,dataDir,k
   const valid=active&&selection.selected&&current?.root===selection.root&&current?.generation===selection.generation&&current?.policyGeneration===policy.snapshot().generation;
   const verified=valid&&current?.localContentVerified===true;
   let aiVerified=false;try{if(valid&&current?.aiMemory){assertOnboardingAIMemoryReceipt(current.aiMemory);aiVerified=true;}}catch{}
-  const pending=['aiMemory','codex','integrationReceipts','hooks','capture','maintenance'].filter(k=>required[k]&&(k!=='aiMemory'||!aiVerified));
+  let aiInstalled=false;try{if(valid&&current?.aiMemoryInstallation){assertAIMemoryInstallationReceipt(current.aiMemoryInstallation);aiInstalled=true;}}catch{}
+  const pending=['aiMemory','codex','integrationReceipts','hooks','capture','maintenance'].filter(k=>required[k]&&(k!=='aiMemory'||!aiVerified&&!aiInstalled));
   if(!verified)pending.unshift('catalog_installation','method_installation');
   if(!valid||current?.indexVerified!==true)pending.push('index_verification');
   // A verified local index/content phase cannot satisfy consent/integration
   // gates. This coordinator deliberately never emits full-system completion.
   return {status:valid?onboardingCoordinatorPhaseStatus(current.phase,aiVerified):'not_started',localContentVerified:!!verified,localContentPhase:verified?'readback_verified':'not_verified',method:verified?current.method:null,manifestSHA256:valid?current.manifestSHA256:null,
    localProgress:{completed:valid?(current.provenPhases||[]).filter(p=>p!=='ai_memory_runtime'||aiVerified).length:0,total:required.aiMemory?5:4,confirmed:valid?(current.provenPhases||[]).filter(p=>p!=='ai_memory_runtime'||aiVerified):[]},
-   aiMemoryVerified:aiVerified,aiMemory:aiVerified?current.aiMemory:null,indexVerified:valid&&current?.indexVerified===true,conflict:valid?current?.conflict||null:null,pendingStages:pending,requiredComponents:required,readiness:false,completed:false,running:busy,resumable:valid&&current?.phase!=='not_started'};
+   aiMemoryVerified:aiVerified,aiMemory:aiVerified?current.aiMemory:null,aiMemoryInstallationVerified:aiInstalled,aiMemoryInstallation:aiInstalled?current.aiMemoryInstallation:null,restored:valid&&current?.restored===true,indexVerified:valid&&current?.indexVerified===true,conflict:valid?current?.conflict||null:null,pendingStages:pending,requiredComponents:required,readiness:false,completed:false,running:busy,resumable:valid&&current?.phase!=='not_started'};
  };
  async function run(mode,{signal}={}){
   if(busy)fail('onboarding_busy');const selected=vault.status();if(!selected.selected)fail('vault_required');
@@ -42,25 +44,33 @@ export function createOnboardingCoordinator({policy,vault,profileStore,dataDir,k
    await profileStore.update(profile=>({...profile,onboardingContentCoordinator:{schemaVersion:1,phase,manifestSHA256:current.manifestSHA256||null,localContentVerified:current.localContentVerified===true,indexVerified:current.indexVerified===true,aiMemoryVerified:!!current.aiMemory,completed:false,readiness:false}}),{beforeCommit:check});check();};
   try{
    check();await policy.revalidateAdmission(ticket);check();await save('planning');
-   const source=await sourceProvider({ticket,signal:local.signal});check();
-   const plan=createContentInstallationPlan(source?.admitted);current={...current,manifestSHA256:plan.manifestSHA256,localContentVerified:false,indexVerified:false,aiMemory:null,conflict:null,provenPhases:[]};
+   if(mode==='restore'&&typeof sourceProvider.verifyInstalled!=='function')fail('installation_restore_unavailable');
+   const source=await (mode==='restore'?sourceProvider.verifyInstalled:sourceProvider)({ticket,signal:local.signal});check();
+   const plan=createContentInstallationPlan(source?.admitted);current={...current,manifestSHA256:plan.manifestSHA256,localContentVerified:false,indexVerified:false,aiMemory:null,aiMemoryInstallation:null,restored:false,conflict:null,provenPhases:[]};
    const sourceMethod=await verifyGBrainMethodInstallation({admitted:source.admitted,payloadRoot:source.payloadRoot,check});check();assertVerifiedGBrainMethod(sourceMethod);
    current.provenPhases=['signed_plan'];await save('planned');if(mode==='plan')return {...snapshot(),running:false,filesPlanned:plan.entries.length,methodFilesPlanned:sourceMethod.filesVerified};
    await save(mode==='resume'?'resuming':'installing');
-   const result=await installer.install(plan,{payloadRoot:source.payloadRoot,signal:local.signal});check();
+   const result=await (mode==='restore'?installer.verify(plan,{signal:local.signal}):installer.install(plan,{payloadRoot:source.payloadRoot,signal:local.signal}));check();
    if(!result.completed){current.conflict=result.conflict;await save('conflicted');return {...snapshot(),running:false};}
    current.provenPhases.push('content_files');await save('readback');
    const method=await vault.withContentTransaction(async grant=>{const verify=()=>{check();grant.check();};await grant.checkRoot();verify();
     const receipt=await verifyGBrainMethodInstallation({admitted:source.admitted,methodRoot:result.methodRoot,check:verify});await grant.checkRoot();verify();return receipt;
    },{signal:local.signal});check();assertVerifiedGBrainMethod(method);
    current={...current,method,localContentVerified:true};current.provenPhases.push('method_readback');await save('indexing');
-   const index=await runIndexCheckpoints({knowledge,check,signal:local.signal});check();
+   let index=mode==='restore'?await knowledge.verifyExisting({signal:local.signal}):null;check();
+   if(!index?.complete)index=await runIndexCheckpoints({knowledge,check,signal:local.signal});check();
    current.indexVerified=index.complete===true&&index.state==='current';if(current.indexVerified)current.provenPhases.push('local_index');await save(current.indexVerified?'local_content_verified':'index_partial');
-   if(current.indexVerified&&afterLocalVerification){await afterLocalVerification({ticket,signal:local.signal,check});check();}
+   if(current.indexVerified&&afterLocalVerification){await vault.withContentReadScope(async grant=>{const verify=()=>{check();grant.check();};await afterLocalVerification({ticket,signal:local.signal,check:verify,restoring:mode==='restore'});verify();},{signal:local.signal});check();}
    if(current.indexVerified&&required.aiMemory){
     if(!aiMemoryPhase){await save('ai_memory_pending');return {...snapshot(),running:false};}
-    await save('ai_memory_preparing');const receipt=await aiMemoryPhase.prepare({ticket,planHash:plan.manifestSHA256,signal:local.signal});check();assertOnboardingAIMemoryReceipt(receipt);
-    current.aiMemory=receipt;current.provenPhases.push('ai_memory_runtime');await save('ai_memory_verified');
+    await save('ai_memory_preparing');
+    if(mode==='restore'){
+      const receipt=await aiMemoryPhase.verifyInstallation({ticket,planHash:plan.manifestSHA256,signal:local.signal});check();assertAIMemoryInstallationReceipt(receipt);
+      current.aiMemoryInstallation=receipt;current.restored=true;current.provenPhases.push('ai_memory_installation');await save('installation_restored');
+    }else{
+      const receipt=await aiMemoryPhase.prepare({ticket,planHash:plan.manifestSHA256,signal:local.signal});check();assertOnboardingAIMemoryReceipt(receipt);
+      current.aiMemory=receipt;current.provenPhases.push('ai_memory_runtime');await save('ai_memory_verified');
+    }
    }
    return {...snapshot(),running:false};
   }catch(error){
@@ -72,5 +82,5 @@ export function createOnboardingCoordinator({policy,vault,profileStore,dataDir,k
   }finally{busy=false;if(controller===local)controller=null;signal?.removeEventListener('abort',abort);}
  }
  return Object.freeze({snapshot,async status(){const value=snapshot();if(value.resumable||busy)return value;const prior=(await profileStore.load()).onboardingContentCoordinator;return {...value,resumable:!!prior&&prior.phase!=='not_started',resumePhase:prior?.phase||null};},
-  plan:options=>run('plan',options),install:options=>run('install',options),resume:options=>run('resume',options),cancel(){epoch++;controller?.abort();knowledge.cancel();aiMemoryPhase?.cancel();if(current)current={...current,phase:'cancelled',localContentVerified:false,indexVerified:false,aiMemory:null};return snapshot();}});
+  plan:options=>run('plan',options),install:options=>run('install',options),resume:options=>run('resume',options),restore:options=>run('restore',options),cancel(){epoch++;controller?.abort();knowledge.cancel();aiMemoryPhase?.cancel();if(current)current={...current,phase:'cancelled',localContentVerified:false,indexVerified:false,aiMemory:null,aiMemoryInstallation:null};return snapshot();}});
 }

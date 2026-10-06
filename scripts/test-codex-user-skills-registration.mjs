@@ -25,7 +25,19 @@ test('signed complete directories register in USER scope and retries preserve or
  for(let i=0;i<2;i++){assert.equal(await fs.realpath(join(f.destination,names[i],'SKILL.md')),join(f.vaultRoot,entries[i]));assert.equal(await fs.readFile(join(f.vaultRoot,entries[i]),'utf8'),files[entries[i]]);}
  assert.equal(await fs.readFile(join(f.destination,names[0],'references/context.md'),'utf8'),files[reference]);
  assert.equal((await f.register({admitted:f.admitted,ticket:f.ticket})).created,0);
+ const verified=await f.register.verifyExisting({admitted:f.admitted,ticket:f.ticket});assert.equal(verified.created,0);assert.equal(assertCompleteCodexUserSkillsRegistration(f.admitted,verified),verified);
  assert.equal(await fs.readFile(join(f.destination,'unrelated/SKILL.md'),'utf8'),'USER');assert.equal(existsSync(join(f.userHome,'.codex')),false);
+});
+test('existing registration rejects changed entrypoints, replaced host links and revocation',async t=>{
+ for(const mode of ['entry','link','revoked'])await t.test(mode,async t=>{
+  const f=await fixture(t);await f.register({admitted:f.admitted,ticket:f.ticket});
+  if(mode==='entry')await fs.writeFile(join(f.vaultRoot,entries[0]),'USER EDIT');
+  if(mode==='link'){await fs.unlink(join(f.destination,names[0]));await fs.mkdir(join(f.destination,names[0]));await fs.writeFile(join(f.destination,names[0],'SKILL.md'),'USER SKILL');}
+  if(mode==='revoked')f.policy.revoke();
+  await assert.rejects(f.register.verifyExisting({admitted:f.admitted,ticket:f.ticket}));
+  if(mode==='entry')assert.equal(await fs.readFile(join(f.vaultRoot,entries[0]),'utf8'),'USER EDIT');
+  if(mode==='link')assert.equal(await fs.readFile(join(f.destination,names[0],'SKILL.md'),'utf8'),'USER SKILL');
+ });
 });
 test('registration preflight rejects unmanaged collisions, redirected parents and modified references',async t=>{
  for(const mode of ['collision','source-link','destination-link','modified-reference']){

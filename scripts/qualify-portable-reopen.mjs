@@ -17,7 +17,14 @@ const finish=async service=>{let phase='';const timer=setInterval(()=>{const cur
 if(options['--child-profile']){
  const dataDir=isolated(options['--child-profile']),userHome=isolated(options['--user-home']);
  const service=await createService({root,dataDir,codexUserHome:userHome,codexConnectionFactory:()=>null,keys:{version:1,keys:{'synthetic-reopen':options['--public-key']}}});
- try{const state=await finish(service);assert.equal(state.status,'completed');assert.equal(state.resumeExisting,true);assert.equal(state.aiMemoryRuntime.runtimeReady,false);await fs.writeFile(isolated(options['--output']),JSON.stringify({passed:true,runID:state.runID,pid:process.pid}));}finally{await service.close();}
+ try{
+  if(options['--dormant']){
+   assert.equal(service.vault.status().selected,false);process.stdout.write('ready\n');
+   await new Promise(resolve=>{process.stdin.once('data',resolve);process.stdin.resume();});process.stdin.pause();
+   const polls=await Promise.all(Array.from({length:6},()=>service.dispatcher.dispatch('onboardingStatus')));for(const poll of polls)assert.equal(poll.hasVault,true);
+  }
+  const state=await finish(service);assert.equal(state.status,'completed');assert.equal(state.resumeExisting,true);assert.equal(state.aiMemoryRuntime.runtimeReady,false);await fs.writeFile(isolated(options['--output']),JSON.stringify({passed:true,runID:state.runID,pid:process.pid,dormantResumed:!!options['--dormant']}));
+ }finally{await service.close();}
 }else{
  const previousPath=isolated(options['--installation-report']),previous=JSON.parse(await fs.readFile(previousPath));assert(previous.passed&&previous.installationCompleted&&previous.personalProfileUsed===false);
  const dataDir=isolated(previous.dataDir||join(dirname(previousPath),'private')),vault=isolated(previous.vault),userHome=isolated(previous.userHome);
@@ -25,20 +32,28 @@ if(options['--child-profile']){
  const pair=generateKeyPairSync('ed25519'),publicKey=pair.publicKey.export({type:'spki',format:'der'}).subarray(-32).toString('base64'),keys={version:1,keys:{'synthetic-reopen':publicKey}};
  const payload=Buffer.from(JSON.stringify({version:3,product:'oracle-macos',keyID:'synthetic-reopen',licenseID:randomUUID(),subject:'Disposable reopen qualification',issuedAt:Math.floor(Date.now()/1000)-1,role:'student',accessKeyHash:'c'.repeat(64)}));
  const license='ORACLE3.'+payload.toString('base64url')+'.'+sign(null,Buffer.concat([Buffer.from('ORACLE3.'),payload]),pair.privateKey).toString('base64url');
+ // Only disposable fixture setup: both conversations start with a valid
+ // license but without a durable selection, before the first picker action.
+ const profilePath=join(dataDir,'profile.json'),initialProfile=JSON.parse(await fs.readFile(profilePath));await fs.writeFile(profilePath,JSON.stringify({...initialProfile,license,vaultSelection:null}),{mode:0o600});
  let pickerCalls=0;const platform=await createPlatformHostProviders();assert(platform.directoryBookmarks);
  const providers={...platform,chooseDirectory:async()=>{pickerCalls++;return {path:vault,authorization:'explicit-user-selection'};}};
  const open=()=>createService({root,dataDir,codexUserHome:userHome,providers,codexConnectionFactory:()=>null,keys});
+ const child=number=>new Promise((yes,no)=>{const output=join(scratch,'conversation-'+number+'.json'),command=spawn(process.execPath,[resolve('scripts/qualify-portable-reopen.mjs'),'--payload-root',root,'--child-profile',dataDir,'--user-home',userHome,'--public-key',publicKey,'--output',output],{shell:false,stdio:['ignore','ignore','pipe']});let error='';command.stderr.on('data',value=>error+=value);command.on('error',no);command.on('exit',async status=>{try{if(status!==0)throw Error(error);yes(JSON.parse(await fs.readFile(output)));}catch(failure){no(failure);}});});
+ const dormantOutput=join(scratch,'dormant-conversation.json'),dormant=spawn(process.execPath,[resolve('scripts/qualify-portable-reopen.mjs'),'--payload-root',root,'--child-profile',dataDir,'--user-home',userHome,'--public-key',publicKey,'--dormant','true','--output',dormantOutput],{shell:false,stdio:['pipe','pipe','pipe']});let dormantError='';dormant.stderr.on('data',value=>dormantError+=value);
+ const dormantDone=new Promise((yes,no)=>{dormant.on('error',no);dormant.on('exit',async code=>{try{if(code!==0)throw Error(dormantError);yes(JSON.parse(await fs.readFile(dormantOutput)));}catch(error){no(error);}});});dormantDone.catch(()=>{});
+ const dormantReady=new Promise((yes,no)=>{const timeout=setTimeout(()=>{dormant.kill('SIGKILL');no(Error('Dormant conversation boot timed out'));},30000);let stdout='';dormant.stdout.on('data',bytes=>{stdout+=bytes;if(stdout.includes('ready\n')){clearTimeout(timeout);yes();}});dormant.once('error',error=>{clearTimeout(timeout);no(error);});dormant.once('exit',code=>{clearTimeout(timeout);if(code!==0)no(Error(dormantError));});});
  let service=await open(),runID,contentBefore,stageBefore,protectedBefore;
  const profile=()=>JSON.parse(fsSyncProfile());
  function fsSyncProfile(){return readFileSync(join(dataDir,'profile.json'),'utf8');}
  const protectedPaths=[join(vault,'PESSOAL/original.md'),join(dataDir,'ai-memory/oracle-owned.json'),join(dataDir,'ai-memory/profile-prepared.json'),join(dataDir,'ai-memory/data/config.toml'),join(dataDir,'ai-memory/data/db/memory.sqlite')];
  const fingerprint=async()=>Object.fromEntries(await Promise.all(protectedPaths.map(async file=>{const info=await fs.stat(file);return [file,{sha256:createHash('sha256').update(await fs.readFile(file)).digest('hex'),mtimeMs:info.mtimeMs}];})));
  try{
-  await service.policy.activate(license);const ticket=service.policy.requireCapability('configure');await service.profileStore.update(value=>({...value,license}),{beforeCommit:()=>service.policy.assertAdmission(ticket)});
+  await dormantReady;
   contentBefore=profile().contentInstallations;stageBefore=await fs.readdir(join(dataDir,'content-staging'));protectedBefore=await fingerprint();
   await service.dispatcher.dispatch('onboardingChooseVault');const first=await finish(service);assert.equal(first.status,'completed');assert.equal(first.resumeExisting,true);assert.equal(first.aiMemoryInstallationVerified,true);assert.equal(first.aiMemoryRuntime.runtimeReady,false);assert.equal(pickerCalls,1);runID=first.runID;
   await service.dispatcher.dispatch('onboardingKnowledgeWelcomeSeen',{runID,vault});
- }finally{await service.close();}
+  dormant.stdin.end('\n');const resumed=await dormantDone;assert.equal(resumed.dormantResumed,true);assert.equal(resumed.runID,runID);assert.notEqual(resumed.pid,process.pid);assert.equal(pickerCalls,1);
+ }finally{if(dormant.exitCode===null)dormant.kill('SIGKILL');await service.close();}
  service=await open();
  try{
   assert.equal(service.vault.status().selected,true);const reopened=await finish(service);assert.equal(reopened.status,'completed');assert.equal(reopened.runID,runID);assert.deepEqual(reopened.knowledgeWelcome,{runID,vault});assert.equal(pickerCalls,1);assert.equal(reopened.hooksTrusted,false);assert.equal(reopened.captureReady,false);assert.equal(reopened.codexConnected,false);assert.equal(service.memoryConsent.snapshot().portabilityAuthorized,false);
@@ -46,7 +61,6 @@ if(options['--child-profile']){
   for(let i=0;i<2;i++)await server.request('tools/call',{name:'oracle_open',arguments:{}});
   assert.equal((await service.dispatcher.dispatch('onboardingStatus')).runID,runID);
  }finally{await service.close();}
- const child=number=>new Promise((yes,no)=>{const output=join(scratch,'conversation-'+number+'.json'),command=spawn(process.execPath,[resolve('scripts/qualify-portable-reopen.mjs'),'--payload-root',root,'--child-profile',dataDir,'--user-home',userHome,'--public-key',publicKey,'--output',output],{shell:false,stdio:['ignore','ignore','pipe']});let error='';command.stderr.on('data',value=>error+=value);command.on('error',no);command.on('exit',async status=>{try{if(status!==0)throw Error(error);yes(JSON.parse(await fs.readFile(output)));}catch(failure){no(failure);}});});
  const children=await Promise.all([child(1),child(2)]);for(const result of children){assert(result.passed);assert.equal(result.runID,runID);}assert.notEqual(children[0].pid,children[1].pid);
  assert.deepEqual(profile().contentInstallations,contentBefore);assert.deepEqual(await fs.readdir(join(dataDir,'content-staging')),stageBefore);assert.deepEqual(await fingerprint(),protectedBefore);
  // A user's changed skill must be preserved and must not become completion
@@ -62,6 +76,6 @@ if(options['--child-profile']){
  const code=`import {createProfileStore} from ${JSON.stringify(pathToFileURL(join(root,'profile-store.mjs')).href)};import {createProfileKernelLock} from ${JSON.stringify(pathToFileURL(join(root,'profile-kernel-lock.mjs')).href)};const store=createProfileStore({dataDir:${JSON.stringify(crashDir)},acquireLock:createProfileKernelLock(${JSON.stringify(addon)})});const timer=setInterval(()=>{},1000);await store.update(async value=>{process.stdout.write('locked\\n');await new Promise(()=>{});return value;});clearInterval(timer);`;
  const writer=spawn(process.execPath,['--eval',code],{shell:false,stdio:['ignore','pipe','pipe']});let diagnostic='';writer.stderr.on('data',value=>diagnostic+=value);
  const stopped=new Promise(resolve=>writer.on('exit',resolve));await new Promise((yes,no)=>{const timer=setTimeout(()=>{writer.kill('SIGKILL');no(Error('Kernel lock fixture timed out: '+diagnostic));},10000);writer.stdout.once('data',value=>{clearTimeout(timer);assert.equal(String(value),'locked\n');yes();});writer.once('error',error=>{clearTimeout(timer);no(error);});});writer.kill('SIGKILL');await stopped;await store.update(value=>({...value,count:value.count+1}));assert.equal((await store.load()).count,1);
- const report={passed:true,scope:'Packaged existing-installation restart with actual macOS bookmark, two separate concurrent conversations and preservation checks',payloadRoot:root,packageReceiptSHA256:createHash('sha256').update(await fs.readFile(join(root,'portable-package-receipt.json'))).digest('hex'),actualOSBookmark:true,realGBrainStatus:true,realAIMemoryInstalledSchema:true,aiMemoryServiceStartedOnReopen:false,stableRunID:true,welcomePreserved:true,repeatedOracleOpen:true,concurrentProcesses:2,kernelLockRecoveredAfterCrash:true,contentReinstalled:false,contentDownloaded:false,protectedFilesPreserved:true,editedSkillPreserved:true,forgedJournalNotCompletion:true,revocationVerified:true,legacyInstallRecoveredAfterOneSelection:true,personalProfileUsed:false,accountAccessed:false,hooksTrusted:false,captureEnabled:false,installationReport:previousPath};
+ const report={passed:true,scope:'Packaged existing-installation restart with actual macOS bookmark, dormant conversation, two separate concurrent conversations and preservation checks',payloadRoot:root,packageReceiptSHA256:createHash('sha256').update(await fs.readFile(join(root,'portable-package-receipt.json'))).digest('hex'),actualOSBookmark:true,realGBrainStatus:true,realAIMemoryInstalledSchema:true,aiMemoryServiceStartedOnReopen:false,stableRunID:true,welcomePreserved:true,repeatedOracleOpen:true,concurrentProcesses:2,dormantConversationResumed:true,kernelLockRecoveredAfterCrash:true,contentReinstalled:false,contentDownloaded:false,protectedFilesPreserved:true,editedSkillPreserved:true,forgedJournalNotCompletion:true,revocationVerified:true,legacyInstallRecoveredAfterOneSelection:true,personalProfileUsed:false,accountAccessed:false,hooksTrusted:false,captureEnabled:false,installationReport:previousPath};
  await fs.writeFile(reportPath,JSON.stringify(report,null,2)+'\n');process.stdout.write(JSON.stringify({report:reportPath,...report})+'\n');
 }

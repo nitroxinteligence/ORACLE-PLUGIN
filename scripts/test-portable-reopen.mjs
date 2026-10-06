@@ -6,6 +6,7 @@ import {spawn} from 'node:child_process';
 import {createProfileStore} from '../packages/oracle-desktop-portable/profile-store.mjs';
 import {createPersistentVaultSelection} from '../packages/oracle-desktop-portable/persistent-vault-selection.mjs';
 import {createVaultService} from '../packages/oracle-desktop-portable/vault-service.mjs';
+import {createVaultRestoration} from '../packages/oracle-desktop-portable/vault-restoration.mjs';
 
 const base=resolve('.work/portable-reopen-tests');await fs.mkdir(base,{recursive:true});
 async function scratch(){const root=await fs.mkdtemp(join(base,'synthetic-'));return {root,cleanup:()=>fs.rm(root,{recursive:true,force:true})};}
@@ -44,4 +45,33 @@ test('a saved path and completion flags cannot replace an OS grant',async()=>{
   const vault=createVaultService({profileStore,selectionAdapter:{selectVault:async()=>null}});assert.equal(await vault.restoreVault(),null);assert.equal(vault.status().selected,false);
   const forged=createVaultService({profileStore,selectionAdapter:{selectVault:async()=>null,restoreVault:async()=>({root:work.root,persistentSelection:true})}});await assert.rejects(forged.restoreVault(),{code:'EXPLICIT_SELECTION_REQUIRED'});assert.equal(forged.status().selected,false);
  }finally{await work.cleanup();}
+});
+test('a dormant conversation notices a later bookmark and concurrent polls share one restoration',async()=>{
+ let record=null,selected=false,attempts=0,release;
+ const barrier=new Promise(resolve=>release=resolve);
+ const restoration=createVaultRestoration({profileStore:{load:async()=>({vaultSelection:record})},canRestore:()=>!selected,restore:async()=>{attempts++;if(!record)return false;await barrier;selected=true;return true;}});
+ await restoration.ensure();assert.equal(attempts,1);
+ record={bookmark:'OS change hint'};
+ const polls=Array.from({length:6},()=>restoration.ensure());release();
+ assert.deepEqual(await Promise.all(polls),[true,true,true,true,true,true]);assert.equal(attempts,2);
+ record={bookmark:'another conversation selected another vault'};await restoration.ensure();assert.equal(attempts,2);
+});
+test('an invalid OS grant is attempted once until its record or policy generation changes',async()=>{
+ let record={bookmark:'stale'},generation=1,attempts=0;
+ const restoration=createVaultRestoration({profileStore:{load:async()=>({vaultSelection:record})},canRestore:()=>true,revision:()=>generation,restore:async()=>{attempts++;return false;}});
+ for(let i=0;i<6;i++)await restoration.ensure();assert.equal(attempts,1);
+ record={bookmark:'renewed'};await restoration.ensure();assert.equal(attempts,2);
+ generation++;await restoration.ensure();assert.equal(attempts,3);
+});
+test('an explicit selection, revocation or shutdown during profile loading prevents grant restoration',async()=>{
+ let permitted=true,restoreCalls=0,release;
+ const read=new Promise(resolve=>release=resolve);
+ const restoration=createVaultRestoration({profileStore:{load:()=>read},canRestore:()=>permitted,restore:async()=>{restoreCalls++;return true;}});
+ const pending=restoration.ensure();await Promise.resolve();permitted=false;release({vaultSelection:{bookmark:'existing'}});
+ await restoration.settled();assert.equal(await pending,false);assert.equal(restoreCalls,0);
+});
+test('unexpected restoration failures are visible and do not cache a successful attempt',async()=>{
+ let attempts=0;
+ const restoration=createVaultRestoration({profileStore:{load:async()=>({vaultSelection:{bookmark:'existing'}})},canRestore:()=>true,restore:async()=>{attempts++;throw Error('Synthetic disk failure');}});
+ await assert.rejects(restoration.ensure(),/Synthetic disk failure/);await assert.rejects(restoration.ensure(),/Synthetic disk failure/);assert.equal(attempts,2);
 });

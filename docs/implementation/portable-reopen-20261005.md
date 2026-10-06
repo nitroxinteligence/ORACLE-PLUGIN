@@ -1,4 +1,4 @@
-# Oracle System 0.1.26: retomada da instalação
+# Oracle System 0.1.27: retomada da instalação
 
 O processo portátil perdia a seleção do vault e os recibos em memória ao encerrar.
 O perfil ainda continha a instalação, mas a abertura seguinte voltava à escolha
@@ -42,3 +42,16 @@ Uma instalação antiga sem bookmark exige uma seleção explícita da pasta uma
 A partir dela, a versão nova confere os arquivos já instalados e persiste a
 autorização para as próximas aberturas. A execução Windows permanece sem
 qualificação em um host Windows real.
+
+Uma conversa que iniciou antes da seleção feita em outra conversa também
+recupera a autorização ao consultar o estado ou abrir a interface. O registro
+persistido serve apenas para detectar mudanças: a autorização continua dependendo
+do bookmark real e da identidade da pasta. Consultas simultâneas compartilham uma
+tentativa; um bookmark inválido não é resolvido a cada atualização da interface.
+Seleção explícita, revogação e encerramento impedem restauração concorrente. Uma
+conversa com vault já autorizado não muda de pasta silenciosamente.
+
+A qualificação do ZIP inicia um segundo processo antes da primeira escolha,
+mantém esse processo aberto e só depois consulta a instalação. Ela exige conclusão
+com o mesmo identificador e uma única chamada ao picker. Esse caso reproduzia a
+volta à escolha do Obsidian na 0.1.26 e é agora um gate obrigatório de assinatura.

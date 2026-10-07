@@ -78,3 +78,10 @@ exigindo revisão; um recibo isolado não comprova a instalação.
 `scripts/test-private-method-restore.mjs` verifica a migração de cache, preservação
 de alterações, rejeição de recibos forjados e ausência do cache da geração atual
 em um vault descartável com o catálogo assinado real.
+
+O perfil real usa o diretório persistente `PLUGIN_DATA` do host. A instalação não
+usa `.work/` do repositório para guardar licença, bookmark, memória ou recibos.
+Os arquivos grandes dessa pasta são cópias de desenvolvimento e de qualificação.
+O pipeline portátil agora agrupa suas qualificações em um único diretório
+descartável e o remove ao encerrar, inclusive em falhas, conservando apenas
+relatórios compactos. Reter cópias expandidas exige `--keep-work` explícito.

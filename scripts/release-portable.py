@@ -5,6 +5,7 @@ CI keys exist only during trusted signing calls. Vendor execution never inherits
 publishing credentials, and every publication follows the actual packed gate.
 """
 import argparse, base64, hashlib, json, os, pathlib, shutil, subprocess, tempfile, time, zipfile
+from portable_release_workspace import portable_release_workspace
 
 ROOT=pathlib.Path(__file__).resolve().parents[1]
 KEY_ID='oracle-distribution-20260912'
@@ -19,10 +20,7 @@ def run(args,cwd=ROOT,env=None):
 def read(path):return json.loads(pathlib.Path(path).read_text())
 def version(v):return tuple(map(int,v.split('.')))
 
-def main(a):
-    secret=os.environ.pop('ORACLE_DISTRIBUTION_KEY',None);token=os.environ.pop('GH_TOKEN',None) or os.environ.pop('GITHUB_TOKEN',None)
-    if not secret:raise ValueError('Scoped CI distribution signing secret required')
-    work=ROOT/'.work';work.mkdir(exist_ok=True);job=pathlib.Path(tempfile.mkdtemp(prefix='release-',dir=work))
+def release(a,job,secret,token):
     prior_pins=read(ROOT/'Resources/updates/portable-upstream.json')
     api_env={**os.environ,**({'ORACLE_RELEASE_API_TOKEN':token} if token else {})}
     candidates=json.loads(run(['node',ROOT/'scripts/portable-upstream-intake.mjs','--download','no'],env=api_env))
@@ -78,11 +76,11 @@ def main(a):
     mac_zip=job/('Oracle-System-'+next_version+'-Mac.zip');win_zip=job/('Oracle-System-'+next_version+'-Windows.zip');shutil.copy2(mac/'oracle-system-mac-stable.zip',mac_zip);shutil.copy2(windows/('oracle-system-windows-stable-windows-x64-'+next_version+'.zip'),win_zip)
     boot=job/'current-boot';run(['python3',ROOT/'scripts/qualify-portable-package.py','--archive',mac_zip,'--output',boot]);current=read(boot/'report.json')
     run(['node','--test',ROOT/'scripts/test-portable-codex-installation.mjs'],env={**os.environ,'ORACLE_CODEX_INSTALL_REAL_TEST':'1','ORACLE_CODEX_INSTALL_PAYLOAD_ROOT':current['payloadRoot']})
-    onboarding=run([bun,ROOT/'scripts/qualify-portable-onboarding.mjs','--payload-root',current['payloadRoot']])
+    onboarding=run([bun,ROOT/'scripts/qualify-portable-onboarding.mjs','--payload-root',current['payloadRoot'],'--output',job/'onboarding'])
     installation_report=json.loads(onboarding.strip().splitlines()[-1])['report']
     lifecycle=job/'lifecycle-report.json'
     run([bun,ROOT/'scripts/qualify-portable-reopen.mjs','--payload-root',current['payloadRoot'],'--installation-report',installation_report,'--output',lifecycle])
-    migration=json.loads(run([bun,ROOT/'scripts/qualify-portable-upstream.mjs','--previous-root',prior_runtime['payloadRoot'],'--previous-bun',prior_runtime['runtime'],'--current-root',current['payloadRoot'],'--current-bun',current['runtime']]))
+    migration=json.loads(run([bun,ROOT/'scripts/qualify-portable-upstream.mjs','--previous-root',prior_runtime['payloadRoot'],'--previous-bun',prior_runtime['runtime'],'--current-root',current['payloadRoot'],'--current-bun',current['runtime'],'--output',job/'migration']))
     stage=job/'marketplace';run(['python3',ROOT/'scripts/prepare-plugin-release.py','--mac',mac_zip,'--windows',win_zip,'--version',next_version,'--output',stage])
     release=job/'oracle-plugin-release.json';revision=run(['git','rev-parse','HEAD']).strip()
     signed(['node',ROOT/'scripts/sign-plugin-release.mjs','--stage',stage,'--version',next_version,'--sequence',str(sequence),'--revision',revision,'--packed-report',boot/'report.json','--migration-report',migration['report'],'--lifecycle-report',lifecycle,'--output',release])
@@ -101,5 +99,11 @@ def main(a):
     run(['gh','release','create',tag,mac_zip,win_zip,release,sums,'--draft','--verify-tag','--title','Oracle System '+next_version,'--notes-file',notes],env=publish_env);run(['gh','release','edit',tag,'--draft=false','--latest'],env=publish_env)
     print(json.dumps({'qualified':True,'published':True,'version':next_version,'sequence':sequence}))
 
+def main(a):
+    secret=os.environ.pop('ORACLE_DISTRIBUTION_KEY',None);token=os.environ.pop('GH_TOKEN',None) or os.environ.pop('GITHUB_TOKEN',None)
+    if not secret:raise ValueError('Scoped CI distribution signing secret required')
+    with portable_release_workspace(ROOT,keep_work=a.keep_work) as job:
+        return release(a,job,secret,token)
+
 if __name__=='__main__':
-    p=argparse.ArgumentParser(description=__doc__);p.add_argument('--event',required=True,choices=['push','schedule','workflow_dispatch']);p.add_argument('--mode',default='release',choices=['release','validate']);main(p.parse_args())
+    p=argparse.ArgumentParser(description=__doc__);p.add_argument('--event',required=True,choices=['push','schedule','workflow_dispatch']);p.add_argument('--mode',default='release',choices=['release','validate']);p.add_argument('--keep-work',action='store_true',help='Explicitly retain large temporary artifacts for diagnosis');main(p.parse_args())

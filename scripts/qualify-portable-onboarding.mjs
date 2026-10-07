@@ -10,8 +10,11 @@ const root=resolve(options['--payload-root']||''),work=resolve('.work');
 if(!root.startsWith(work+'/')||await fs.realpath(root)!==root)throw Error('Isolated admitted payload root required');
 const {createService}=await import(pathToFileURL(join(root,'service.mjs')));
 const {createPlatformHostProviders}=await import(pathToFileURL(join(root,'platform-host-providers.mjs')));
-const base=join(work,'portable-onboarding-qualification');await fs.mkdir(base,{recursive:true});
-const scratch=await fs.mkdtemp(join(base,'synthetic-')),vault=join(scratch,'vault'),data=join(scratch,'private'),userHome=join(scratch,'user');
+let scratch;
+if(options['--output']){
+ scratch=resolve(options['--output']);if(!scratch.startsWith(work+'/')||await fs.realpath(dirname(scratch))!==dirname(scratch))throw Error('Fresh canonical qualification output inside .work required');await fs.mkdir(scratch,{mode:0o700});
+}else{const base=join(work,'portable-onboarding-qualification');await fs.mkdir(base,{recursive:true});scratch=await fs.mkdtemp(join(base,'synthetic-'));}
+const vault=join(scratch,'vault'),data=join(scratch,'private'),userHome=join(scratch,'user');
 await fs.mkdir(vault,{mode:0o700});await fs.mkdir(data,{mode:0o700});
 await fs.mkdir(userHome,{mode:0o700});
 const legacyWorkspace=join(data,'codex-workspaces',createHash('sha256').update(vault).digest('hex'));

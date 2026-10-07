@@ -20,7 +20,7 @@ CHUNK = 1024 * 1024
 LIMIT = 100_000_000
 ALLOWED_REPLACEMENTS = frozenset({
     'profile-store.mjs', 'profile-write-lock.mjs', 'persistent-vault-selection.mjs', 'vault-restoration.mjs', 'mac-bookmark-provider.mjs', 'platform-host-providers.mjs',
-    'vault-content-transaction.mjs', 'ai-memory-composition.mjs', 'ai-memory-runtime.mjs', 'ai-memory-process.mjs', 'onboarding-ai-memory.mjs', 'ai-memory-installation-verifier.mjs', 'codex-user-skills-registration.mjs',
+    'vault-content-transaction.mjs', 'private-method-restore.mjs', 'ai-memory-composition.mjs', 'ai-memory-runtime.mjs', 'ai-memory-process.mjs', 'onboarding-ai-memory.mjs', 'ai-memory-installation-verifier.mjs', 'codex-user-skills-registration.mjs',
     'codex-installation-provider.mjs',
     'knowledge-interview-service.mjs', 'codex-interview-link.mjs', 'host-capabilities.mjs', 'windows-shell-provider.mjs',
     'resources/web/knowledge-prompts.js', 'resources/web/onboarding-v2.js', 'resources/web/onboarding.js',

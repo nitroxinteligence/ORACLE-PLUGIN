@@ -1,0 +1,36 @@
+// Signed package readback against a disposable installation, never a user vault.
+import fs from 'node:fs/promises';
+import {resolve,join} from 'node:path';
+import {generateKeyPairSync,randomUUID,sign,createHash} from 'node:crypto';
+import assert from 'node:assert/strict';
+import {createAccessPolicy} from '../packages/oracle-desktop-portable/access-policy.mjs';
+import {createProfileStore} from '../packages/oracle-desktop-portable/profile-store.mjs';
+import {createVaultService} from '../packages/oracle-desktop-portable/vault-service.mjs';
+import {verifyPortableContentManifest,loadReviewedContentTrust} from '../packages/oracle-desktop-portable/content-admission.mjs';
+import {createContentInstallationPlan} from '../packages/oracle-desktop-portable/content-installation-plan.mjs';
+import {createVaultContentTransaction} from '../packages/oracle-desktop-portable/vault-content-transaction.mjs';
+const args=Object.fromEntries(process.argv.slice(2).reduce((out,key,i,all)=>i%2?out:[...out,[key,all[i+1]]],[]));
+const work=resolve('.work'),root=resolve(args['--payload-root']||''),reportPath=resolve(args['--installation-report']||'');
+for(const path of [root,reportPath])if(!path.startsWith(work+'/')||await fs.realpath(path)!==path)throw Error('Canonical disposable fixture required');
+const previous=JSON.parse(await fs.readFile(reportPath));assert(previous.passed&&previous.installationCompleted&&previous.personalProfileUsed===false);
+const vaultPath=resolve(previous.vault);if(!vaultPath.startsWith(work+'/')||await fs.realpath(vaultPath)!==vaultPath)throw Error('Disposable vault required');
+const admitted=verifyPortableContentManifest(await fs.readFile(join(root,'resources/updates/portable-content.json')),{trust:loadReviewedContentTrust(join(root,'resources'))}),plan=createContentInstallationPlan(admitted);
+const base=join(work,'private-method-restore-tests');await fs.mkdir(base,{recursive:true});const scratch=await fs.mkdtemp(join(base,'synthetic-'));
+const pair=generateKeyPairSync('ed25519'),policy=createAccessPolicy({keys:{version:1,keys:{synthetic:pair.publicKey.export({type:'spki',format:'der'}).subarray(-32).toString('base64')}}});
+const license=Buffer.from(JSON.stringify({version:3,product:'oracle-macos',keyID:'synthetic',licenseID:randomUUID(),subject:'Synthetic method migration',issuedAt:Math.floor(Date.now()/1000)-1,role:'student',accessKeyHash:'a'.repeat(64)}));
+await policy.activate('ORACLE3.'+license.toString('base64url')+'.'+sign(null,Buffer.concat([Buffer.from('ORACLE3.'),license]),pair.privateKey).toString('base64url'));
+const checks=[];
+const fixture=async(name,target=vaultPath,manifest='c51017b3eaaf6b7c5d9f99e1e05462ce699fab5bf8c71380e688bbb625950898')=>{
+ const dataDir=join(scratch,name),store=createProfileStore({dataDir});await fs.mkdir(dataDir,{mode:0o700});
+ const vault=createVaultService({profileStore:store,admission:{createAdmissionTicket:()=>policy.requireCapability('configure'),assertAdmissionTicket:ticket=>policy.assertAdmission(ticket)},selectionAdapter:{selectVault:async()=>({root:target,explicitSelection:true})}});await vault.selectVault();
+ const identity=await fs.stat(target);await store.update(value=>({...value,contentInstallations:{previous:{completed:true,manifestSHA256:manifest,rootIdentity:{dev:identity.dev,ino:identity.ino}}}}));
+ return {dataDir,store,vault,transaction:createVaultContentTransaction({vault,policy,profileStore:store,dataDir})};
+};
+const first=await fixture('upgrade'),old=join(first.dataDir,'installed-method','c51017b3eaaf6b7c5d9f99e1e05462ce699fab5bf8c71380e688bbb625950898');await fs.mkdir(old,{recursive:true,mode:0o700});await fs.writeFile(join(old,'retained.md'),'# Previous method\n');
+const before=await first.store.load(),sentinel=await fs.readFile(join(vaultPath,'PESSOAL/original.md'));
+const result=await first.transaction.verify(plan,{payloadRoot:root});assert(result.completed&&result.methodMigrated&&result.filesCreated===0);assert.deepEqual((await first.store.load()).contentInstallations,before.contentInstallations);assert((await fs.readFile(join(vaultPath,'PESSOAL/original.md'))).equals(sentinel));assert.equal(await fs.readFile(join(old,'retained.md'),'utf8'),'# Previous method\n');checks.push('signed private method migrates after complete vault readback without reinstalling content');
+const method=plan.entries.find(row=>row.scope==='private-method'),modified=join(result.methodRoot,method.destination),edited=Buffer.from('# Synthetic edit\n');await fs.writeFile(modified,edited);await assert.rejects(first.transaction.verify(plan,{payloadRoot:root}),{code:'content_existing_conflict'});assert((await fs.readFile(modified)).equals(edited));checks.push('an existing changed method is preserved and blocks completion');
+const empty=join(scratch,'empty-vault');await fs.mkdir(empty);const forged=await fixture('forged-journal',empty);await assert.rejects(forged.transaction.verify(plan,{payloadRoot:root}),{code:'content_installation_missing'});await assert.rejects(fs.stat(join(forged.dataDir,'installed-method')),{code:'ENOENT'});checks.push('a forged previous journal cannot create the method or prove an absent catalog');
+const current=await fixture('same-generation',vaultPath,plan.manifestSHA256);await assert.rejects(current.transaction.verify(plan,{payloadRoot:root}),{code:'content_installation_missing'});checks.push('a missing current-generation cache remains an explicit repair requirement');
+for(const item of [first,forged,current])item.vault.revoke();policy.revoke();
+const report={passed:true,checks,syntheticJournal:true,actualSignedPackage:true,personalProfileUsed:false,contentReinstalled:false,scratch,packageManifestSHA256:plan.manifestSHA256,sourceSHA256:createHash('sha256').update(await fs.readFile(resolve('packages/oracle-desktop-portable/private-method-restore.mjs'))).digest('hex')};await fs.writeFile(join(scratch,'report.json'),JSON.stringify(report,null,2)+'\n');console.log(JSON.stringify({passed:true,checks,report:join(scratch,'report.json')}));

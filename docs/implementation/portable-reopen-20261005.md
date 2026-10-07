@@ -1,4 +1,4 @@
-# Oracle System 0.1.29: retomada da instalação
+# Oracle System 0.1.30: retomada da instalação
 
 O processo portátil perdia a seleção do vault e os recibos em memória ao encerrar.
 O perfil ainda continha a instalação, mas a abertura seguinte voltava à escolha
@@ -56,7 +56,7 @@ mantém esse processo aberto e só depois consulta a instalação. Ela exige con
 com o mesmo identificador e uma única chamada ao picker. Esse caso reproduzia a
 volta à escolha do Obsidian na 0.1.26 e é agora um gate obrigatório de assinatura.
 
-Na 0.1.29, o controlador do aviso também recebe o estado do snapshot que renderiza
+Na 0.1.30, o controlador do aviso também recebe o estado do snapshot que renderiza
 o mapa. Assim, uma conclusão recebida por esse caminho encerra o aviso, mesmo com
 uma consulta anterior atrasada. Respostas anteriores não podem restaurar o aviso
 depois desse snapshot. A atualização do inventário ocorre separadamente das
@@ -66,3 +66,15 @@ realmente pendente, sem conceder confiança a hooks ou captura.
 `scripts/test-onboarding-status-refresh.py` exercita esses casos em WKWebView
 offline com recibos sintéticos. A versão anterior falha nos três casos de atraso;
 a versão corrigida encerra o aviso e preserva o mapa e os consentimentos.
+
+A atualização do pacote também pode trocar o hash do método privado. Na retomada,
+a versão 0.1.30 verifica primeiro todos os arquivos existentes do vault contra o
+novo plano assinado. Havendo apenas o recibo de uma geração anterior, prepara
+atomicamente o novo cache privado a partir dos recursos assinados do pacote.
+Preserva o cache anterior, as notas, os recibos do acervo e a memória instalada.
+Uma nota alterada, um cache atual ausente ou um método atual alterado continuam
+exigindo revisão; um recibo isolado não comprova a instalação.
+
+`scripts/test-private-method-restore.mjs` verifica a migração de cache, preservação
+de alterações, rejeição de recibos forjados e ausência do cache da geração atual
+em um vault descartável com o catálogo assinado real.

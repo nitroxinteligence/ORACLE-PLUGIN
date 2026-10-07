@@ -50,7 +50,7 @@ export function createOnboardingCoordinator({policy,vault,profileStore,dataDir,k
    const sourceMethod=await verifyGBrainMethodInstallation({admitted:source.admitted,payloadRoot:source.payloadRoot,check});check();assertVerifiedGBrainMethod(sourceMethod);
    current.provenPhases=['signed_plan'];await save('planned');if(mode==='plan')return {...snapshot(),running:false,filesPlanned:plan.entries.length,methodFilesPlanned:sourceMethod.filesVerified};
    await save(mode==='resume'?'resuming':'installing');
-   const result=await (mode==='restore'?installer.verify(plan,{signal:local.signal}):installer.install(plan,{payloadRoot:source.payloadRoot,signal:local.signal}));check();
+   const result=await (mode==='restore'?installer.verify(plan,{payloadRoot:source.payloadRoot,signal:local.signal}):installer.install(plan,{payloadRoot:source.payloadRoot,signal:local.signal}));check();
    if(!result.completed){current.conflict=result.conflict;await save('conflicted');return {...snapshot(),running:false};}
    current.provenPhases.push('content_files');await save('readback');
    const method=await vault.withContentTransaction(async grant=>{const verify=()=>{check();grant.check();};await grant.checkRoot();verify();

@@ -4,6 +4,7 @@ import { createHash } from 'node:crypto';
 import { admittedManifestForPlan } from './content-installation-plan.mjs';
 import { loadAdmittedContentFile, verifyContentFile } from './content-admission.mjs';
 import {upgradeReadableSkillMetadata} from './readable-skill-metadata-upgrade.mjs';
+import {restorePrivateMethod} from './private-method-restore.mjs';
 const fail = code => { throw Object.assign(new Error(code), { code }); };
 const sha = bytes => createHash('sha256').update(bytes).digest('hex');
 const same = (a,b) => a.dev === b.dev && a.ino === b.ino;
@@ -70,19 +71,28 @@ export function createVaultContentTransaction({ vault, policy, profileStore, dat
   if (!vault?.withContentTransaction || !policy?.requireCapability || !policy?.assertAdmission || !policy?.revalidateAdmission || !profileStore?.update) fail('content_transaction_provider_required');
   if (typeof dataDir !== 'string' || resolve(dataDir)!==dataDir) fail('private_content_root_required');
   return Object.freeze({
-    verify(plan,{signal}={}){
+    verify(plan,{payloadRoot,signal}={}){
       const admitted=admittedManifestForPlan(plan),ticket=policy.requireCapability('configure');
       return vault.withContentReadScope(async grant=>{
         const check=()=>{grant.check();policy.assertAdmission(ticket);if(signal?.aborted)fail('content_install_cancelled');};
-        await grant.checkRoot();check();const methodRoot=join(dataDir,'installed-method',plan.manifestSHA256);directory(methodRoot);
-        for(const [index,entry] of plan.entries.entries()){
+        await grant.checkRoot();check();const methodRoot=join(dataDir,'installed-method',plan.manifestSHA256);
+        const verifyEntries=async entries=>{for(const [index,entry] of entries.entries()){
           check();const base=entry.scope==='vault'?grant.root:methodRoot;
           let target;try{target=existingPathUnder(base,entry.destination,check);const parent=directory(dirname(target));verifyContentFile(admitted,entry.source,checkedBytes(target,entry.bytes));if(!same(parent,directory(dirname(target))))fail('content_parent_changed');}
           catch(error){if(error.code==='ENOENT')throw Object.assign(new Error('Um arquivo da instalação está ausente: '+entry.destination+'. Os arquivos existentes foram preservados.'),{code:'content_installation_missing',path:entry.destination});if(['content_existing_conflict','content_path_collision','content_file_changed'].includes(error.code))throw Object.assign(new Error('Um arquivo da instalação foi alterado: '+entry.destination+'. Seu arquivo foi preservado; revise-o antes de reparar a instalação.'),{code:'content_existing_conflict',path:entry.destination});throw error;}
           if(index%32===0){await new Promise(resolve=>setImmediate(resolve));await grant.checkRoot();check();}
+        }};
+        // Read back every existing vault file before creating any derived
+        // cache. A changed or missing note must remain an explicit conflict.
+        await verifyEntries(plan.entries.filter(entry=>entry.scope==='vault'));
+        let methodMigrated=false;
+        try{directory(methodRoot);}catch(error){
+          if(error.code!=='ENOENT')throw error;
+          await restorePrivateMethod({plan,admitted,payloadRoot,dataDir,profileStore,grant,check,filesystem:{directory,privateRoot,pathUnder,same}});methodMigrated=true;
         }
+        await verifyEntries(plan.entries.filter(entry=>entry.scope==='private-method'));
         await grant.checkRoot();check();await policy.revalidateAdmission(ticket);check();
-        return {completed:true,state:'verified-existing',manifestSHA256:plan.manifestSHA256,filesVerified:plan.entries.length,methodRoot,filesCreated:0};
+        return {completed:true,state:'verified-existing',manifestSHA256:plan.manifestSHA256,filesVerified:plan.entries.length,methodRoot,filesCreated:0,methodMigrated};
       },{signal});
     },
     install(plan, { payloadRoot, signal } = {}) {

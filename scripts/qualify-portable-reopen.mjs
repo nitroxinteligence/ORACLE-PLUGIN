@@ -34,7 +34,24 @@ if(options['--child-profile']){
  const license='ORACLE3.'+payload.toString('base64url')+'.'+sign(null,Buffer.concat([Buffer.from('ORACLE3.'),payload]),pair.privateKey).toString('base64url');
  // Only disposable fixture setup: both conversations start with a valid
  // license but without a durable selection, before the first picker action.
- const profilePath=join(dataDir,'profile.json'),initialProfile=JSON.parse(await fs.readFile(profilePath));await fs.writeFile(profilePath,JSON.stringify({...initialProfile,license,vaultSelection:null}),{mode:0o600});
+ const profilePath=join(dataDir,'profile.json'),initialProfile=JSON.parse(await fs.readFile(profilePath));let previousMethodHash,previousMethodFingerprint,currentMethodRoot;
+ if(options['--previous-root']){
+  const oldRoot=isolated(options['--previous-root']),oldMethod=isolated(options['--previous-method-root']);
+  for(const path of [oldRoot,oldMethod])assert.equal(await fs.realpath(path),path);
+  const oldAdmission=await import(pathToFileURL(join(oldRoot,'content-admission.mjs'))),oldVerifier=await import(pathToFileURL(join(oldRoot,'method-installation-verifier.mjs')));
+  const admitted=oldAdmission.verifyPortableContentManifest(await fs.readFile(join(oldRoot,'resources/updates/portable-content.json')),{trust:oldAdmission.loadReviewedContentTrust(join(oldRoot,'resources'))});
+  await oldVerifier.verifyGBrainMethodInstallation({admitted,methodRoot:oldMethod});
+  currentMethodRoot=join(dataDir,'installed-method',createHash('sha256').update(await fs.readFile(join(root,'resources/updates/portable-content.json'))).digest('hex'));
+  await fs.rename(currentMethodRoot,join(scratch,'retained-current-method'));
+  const previousMethodRoot=join(dataDir,'installed-method',admitted.manifestSHA256);await fs.cp(oldMethod,previousMethodRoot,{recursive:true,errorOnExist:true,force:false});
+  previousMethodFingerprint=async()=>Object.fromEntries(await Promise.all(admitted.manifest.files.filter(row=>row.path.startsWith('resources/gbrain-method/')).map(async row=>{const file=join(previousMethodRoot,row.path.slice('resources/gbrain-method/'.length));return [row.path,createHash('sha256').update(await fs.readFile(file)).digest('hex')];})));
+  previousMethodHash=await previousMethodFingerprint();
+  // This journal generation is a synthetic migration seam. Completion still
+  // requires signed vault readback, the OS grant, real index and owned memory.
+  initialProfile.contentInstallations=Object.fromEntries(Object.entries(initialProfile.contentInstallations).map(([key,row])=>[key,{...row,manifestSHA256:admitted.manifestSHA256}]));
+  initialProfile.portableContentFeed={sequence:admitted.manifest.sequence,manifestSHA256:admitted.manifestSHA256,releaseID:admitted.manifest.release_id};
+ }
+ await fs.writeFile(profilePath,JSON.stringify({...initialProfile,license,vaultSelection:null}),{mode:0o600});
  let pickerCalls=0;const platform=await createPlatformHostProviders();assert(platform.directoryBookmarks);
  const providers={...platform,chooseDirectory:async()=>{pickerCalls++;return {path:vault,authorization:'explicit-user-selection'};}};
  const open=()=>createService({root,dataDir,codexUserHome:userHome,providers,codexConnectionFactory:()=>null,keys});
@@ -76,6 +93,7 @@ if(options['--child-profile']){
  const code=`import {createProfileStore} from ${JSON.stringify(pathToFileURL(join(root,'profile-store.mjs')).href)};import {createProfileKernelLock} from ${JSON.stringify(pathToFileURL(join(root,'profile-kernel-lock.mjs')).href)};const store=createProfileStore({dataDir:${JSON.stringify(crashDir)},acquireLock:createProfileKernelLock(${JSON.stringify(addon)})});const timer=setInterval(()=>{},1000);await store.update(async value=>{process.stdout.write('locked\\n');await new Promise(()=>{});return value;});clearInterval(timer);`;
  const writer=spawn(process.execPath,['--eval',code],{shell:false,stdio:['ignore','pipe','pipe']});let diagnostic='';writer.stderr.on('data',value=>diagnostic+=value);
  const stopped=new Promise(resolve=>writer.on('exit',resolve));await new Promise((yes,no)=>{const timer=setTimeout(()=>{writer.kill('SIGKILL');no(Error('Kernel lock fixture timed out: '+diagnostic));},10000);writer.stdout.once('data',value=>{clearTimeout(timer);assert.equal(String(value),'locked\n');yes();});writer.once('error',error=>{clearTimeout(timer);no(error);});});writer.kill('SIGKILL');await stopped;await store.update(value=>({...value,count:value.count+1}));assert.equal((await store.load()).count,1);
- const report={passed:true,scope:'Packaged existing-installation restart with actual macOS bookmark, dormant conversation, two separate concurrent conversations and preservation checks',payloadRoot:root,packageReceiptSHA256:createHash('sha256').update(await fs.readFile(join(root,'portable-package-receipt.json'))).digest('hex'),actualOSBookmark:true,realGBrainStatus:true,realAIMemoryInstalledSchema:true,aiMemoryServiceStartedOnReopen:false,stableRunID:true,welcomePreserved:true,repeatedOracleOpen:true,concurrentProcesses:2,dormantConversationResumed:true,kernelLockRecoveredAfterCrash:true,contentReinstalled:false,contentDownloaded:false,protectedFilesPreserved:true,editedSkillPreserved:true,forgedJournalNotCompletion:true,revocationVerified:true,legacyInstallRecoveredAfterOneSelection:true,personalProfileUsed:false,accountAccessed:false,hooksTrusted:false,captureEnabled:false,installationReport:previousPath};
+ if(previousMethodFingerprint){assert.deepEqual(await previousMethodFingerprint(),previousMethodHash);assert((await fs.stat(currentMethodRoot)).isDirectory());}
+ const report={passed:true,scope:'Packaged existing-installation restart with actual macOS bookmark, dormant conversation, two separate concurrent conversations and preservation checks',payloadRoot:root,packageReceiptSHA256:createHash('sha256').update(await fs.readFile(join(root,'portable-package-receipt.json'))).digest('hex'),actualOSBookmark:true,realGBrainStatus:true,realAIMemoryInstalledSchema:true,aiMemoryServiceStartedOnReopen:false,stableRunID:true,welcomePreserved:true,repeatedOracleOpen:true,concurrentProcesses:2,dormantConversationResumed:true,kernelLockRecoveredAfterCrash:true,contentReinstalled:false,contentDownloaded:false,protectedFilesPreserved:true,editedSkillPreserved:true,forgedJournalNotCompletion:true,revocationVerified:true,legacyInstallRecoveredAfterOneSelection:true,personalProfileUsed:false,accountAccessed:false,hooksTrusted:false,captureEnabled:false,installationReport:previousPath,privateMethodMigrationVerified:!!previousMethodFingerprint,syntheticPreviousJournal:!!previousMethodFingerprint};
  await fs.writeFile(reportPath,JSON.stringify(report,null,2)+'\n');process.stdout.write(JSON.stringify({report:reportPath,...report})+'\n');
 }

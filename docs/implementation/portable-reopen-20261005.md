@@ -1,4 +1,4 @@
-# Oracle System 0.1.27: retomada da instalação
+# Oracle System 0.1.29: retomada da instalação
 
 O processo portátil perdia a seleção do vault e os recibos em memória ao encerrar.
 O perfil ainda continha a instalação, mas a abertura seguinte voltava à escolha
@@ -55,3 +55,14 @@ A qualificação do ZIP inicia um segundo processo antes da primeira escolha,
 mantém esse processo aberto e só depois consulta a instalação. Ela exige conclusão
 com o mesmo identificador e uma única chamada ao picker. Esse caso reproduzia a
 volta à escolha do Obsidian na 0.1.26 e é agora um gate obrigatório de assinatura.
+
+Na 0.1.29, o controlador do aviso também recebe o estado do snapshot que renderiza
+o mapa. Assim, uma conclusão recebida por esse caminho encerra o aviso, mesmo com
+uma consulta anterior atrasada. Respostas anteriores não podem restaurar o aviso
+depois desse snapshot. A atualização do inventário ocorre separadamente das
+consultas curtas de progresso. O aviso continua visível quando a instalação está
+realmente pendente, sem conceder confiança a hooks ou captura.
+
+`scripts/test-onboarding-status-refresh.py` exercita esses casos em WKWebView
+offline com recibos sintéticos. A versão anterior falha nos três casos de atraso;
+a versão corrigida encerra o aviso e preserva o mapa e os consentimentos.

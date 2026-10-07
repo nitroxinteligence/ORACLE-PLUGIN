@@ -1,7 +1,7 @@
 /* V2 visual controller. The host supplies the native bridge; only receipts advance installation. */
 (function () {
   'use strict';
-  let api, root, screen, activation, progress, current={}, stage='', timer, generation=0, pending=false, busy=false;
+  let api, root, screen, activation, progress, current={}, stage='', timer, generation=0, statusRevision=0, pending=false, busy=false;
   const dismissedIntegrations=new Set();
   const integrationKey=()=>JSON.stringify([current.runID,current.vaultPath]);
   let progressRun='',progressValue=0,openedRun='',integrationMessage='',repairing=false;
@@ -210,32 +210,43 @@
     positionProgress();
   }
 
+  const progressSignature=value=>JSON.stringify([value.runID,value.status,value.phase,value.message,value.installationError,value.installationCompleted,value.resumeExisting,value.installationProgress,value.confirmed,value.integrationPending,value.integrationActions,value.bridgeNeedsReprepare]);
+  function receiveStatus(value){
+    const previousHasVault=current.hasVault,previousDestination=destination(current),before=progressSignature(current);current=value;statusRevision++;
+    if(stage==='install'&&previousDestination!==destination(current)){if(destination(current))updateDestination();else show('vault');}
+    else if(stage==='vault'&&(previousHasVault!==current.hasVault||previousDestination!==destination(current)))updateVaultSelection();
+    if(needsRecovery(current)&&api.openRecovery)return {recovery:true,changed:false};
+    if(!busy){
+      const next=!current.licensed?'license':current.resumeExisting?'completed':current.runID?(current.status==='completed'?'completed':'progress'):current.hasVault&&current.ui?.step==='install'?'install':'vault';
+      if(next!==stage)show(next);
+    }
+    updateProgress();return {changed:before!==progressSignature(current)};
+  }
+  function syncStatus(value){
+    // A snapshot is the same authoritative bridge state used to render the
+    // map. Accept it without another RPC or refreshing the snapshot again.
+    if(!api||!value||typeof value.licensed!=='boolean'||needsRecovery(value))return;
+    receiveStatus(value);
+  }
   async function poll(){
-    if(pending||!api)return;pending=true;const epoch=generation;
+    if(pending||!api)return;pending=true;const epoch=generation,revision=statusRevision;
     try{
-      const value=await invoke('onboardingStatus');if(epoch!==generation)return;
-      const previousStatus=current.status,previousHasVault=current.hasVault,previousDestination=destination(current),before=JSON.stringify([current.status,current.installationProgress,current.confirmed]);current=value;
-      if(stage==='install'&&previousDestination!==destination(current)){if(destination(current))updateDestination();else show('vault');}
-      else if(stage==='vault'&&(previousHasVault!==current.hasVault||previousDestination!==destination(current)))updateVaultSelection();
-      if(needsRecovery(current)&&api.openRecovery){await api.openRecovery();return;}
-      // Restore the matching screen when a restarted service returns to setup.
-      if(!busy){
-        const next=!current.licensed?'license':current.resumeExisting?'completed':current.runID?(current.status==='completed'?'completed':'progress'):current.hasVault&&current.ui?.step==='install'?'install':'vault';
-        if(next!==stage)show(next);
-      }
-      updateProgress();
-      if(before!==JSON.stringify([current.status,current.installationProgress,current.confirmed])){
+      const value=await invoke('onboardingStatus');if(epoch!==generation||revision!==statusRevision)return;
+      const received=receiveStatus(value);
+      if(received.recovery){await api.openRecovery();return;}
+      if(received.changed){
         window.dispatchEvent(new CustomEvent('oracle:onboarding-progress',{detail:{schemaVersion:2,...current}}));
-        if(current.runID)await api.refresh?.();
-        if(current.status==='completed'&&stage==='progress')show('completed');
+        // Inventory refresh can be slow. It must not hold the short status
+        // poll open and prevent the following completion receipt from arriving.
+        if(current.runID)void Promise.resolve(api.refresh?.()).catch(error=>{if(epoch===generation)errorToast(error);});
       }
     }catch(error){if(epoch===generation)errorToast(error);}finally{if(epoch===generation)pending=false;}
   }
   function suspend(){generation++;for(const animation of motionHandles)animation.cancel();motionHandles.clear();clearInterval(timer);busy=false;pending=false;repairing=false;integrationMessage='';if(root){clean(root);activation.close();screen.close();progress.hidden=true;const content=screen.querySelector('.ob2-content');content.inert=false;delete content.dataset.transitioning;}document.body.classList.remove('ob2-configuring');api=null;}
   window.OracleOnboardingV2={
-    async mount(options){suspend();api=options;ensure();current=await invoke('onboardingStatus');const next=!current.licensed?'license':current.resumeExisting?'completed':current.runID?(current.status==='completed'?'completed':'progress'):current.hasVault&&current.ui?.step==='install'?'install':'vault';show(next);timer=setInterval(()=>{if(!document.hidden&&!busy)void poll();},800);},
+    async mount(options){suspend();api=options;ensure();const revision=statusRevision,value=await invoke('onboardingStatus');if(revision===statusRevision)current=value;const next=!current.licensed?'license':current.resumeExisting?'completed':current.runID?(current.status==='completed'?'completed':'progress'):current.hasVault&&current.ui?.step==='install'?'install':'vault';show(next);timer=setInterval(()=>{if(!document.hidden&&!busy)void poll();},800);},
     open(options={}){if(options.connection){if(current.installationCompleted===true&&Array.isArray(current.integrationActions)){dismissedIntegrations.delete(integrationKey());closeScreen();updateProgress();}return;}show(options.previewStage||(!current.licensed?'license':current.runID&&current.status!=='completed'?'progress':current.hasVault?'install':'vault'));},
-    suspend,poll,getState:()=>({...current}),pendingDraft:()=>null,prepareToClose:async()=>{if(busy)throw Error('Aguarde esta etapa antes de fechar a configuração.');},
+    suspend,poll,syncStatus,getState:()=>({...current}),pendingDraft:()=>null,prepareToClose:async()=>{if(busy)throw Error('Aguarde esta etapa antes de fechar a configuração.');},
   };
   window.addEventListener('resize',positionProgress);
   const legacy=window.OracleOnboarding;let controller=window.OracleOnboardingV2;
@@ -243,7 +254,7 @@
   // Existing incomplete identity plans keep their own consent and recovery path.
   window.OracleOnboarding={
     async mount(options){legacy?.suspend();window.OracleOnboardingV2.suspend();const status=await options.call('onboardingStatus');controller=needsRecovery(status)||status.legacyPlanAvailable&&status.profileMode!=='memory-only'&&status.runID&&status.status!=='completed'?legacy:window.OracleOnboardingV2;return controller.mount({...options,openRecovery:()=>openRecovery(options)});},
-    open:options=>controller.open(options),poll:()=>controller.poll(),suspend(){legacy?.suspend();window.OracleOnboardingV2.suspend();},
+    open:options=>controller.open(options),poll:()=>controller.poll(),syncStatus:value=>controller.syncStatus?.(value),suspend(){legacy?.suspend();window.OracleOnboardingV2.suspend();},
     getState:()=>controller.getState(),pendingDraft:()=>controller.pendingDraft(),prepareToClose:()=>controller.prepareToClose(),formatReadback:legacy?.formatReadback,
   };
 })();

@@ -131,7 +131,7 @@ async function refresh(){
  const task=(async()=>{const next=await call('snapshot');if(sequence!==refreshSequence||interfaceSuspended)return;
   const librariesChanged=state.scan?.signature!==next.scan?.signature||state.scan?.pending!==next.scan?.pending||state.scan?.complete!==next.scan?.complete||state.scanError!==next.scanError||JSON.stringify(state.config.libraryRoots)!==JSON.stringify(next.config.libraryRoots);
   const scanErrorChanged=state.scanError!==next.scanError;
-  state=next;applyVisualPreferences(false);render();
+  state=next;window.OracleOnboarding?.syncStatus?.(state.onboarding);applyVisualPreferences(false);render();
   if(librariesChanged){window.OracleKnowledgeHub.refresh?.(state.entries);}
   void maybeShowKnowledgeWelcome();
   if(!window.ORACLE_PREVIEW&&state.features?.portableUpdates&&state.onboarding?.status==='completed')void window.OraclePortableUpdates.automatic({call,toast});

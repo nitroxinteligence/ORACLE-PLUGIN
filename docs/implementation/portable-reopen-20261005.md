@@ -85,3 +85,28 @@ Os arquivos grandes dessa pasta são cópias de desenvolvimento e de qualificaç
 O pipeline portátil agora agrupa suas qualificações em um único diretório
 descartável e o remove ao encerrar, inclusive em falhas, conservando apenas
 relatórios compactos. Reter cópias expandidas exige `--keep-work` explícito.
+
+## Correção do perfil na 0.1.31
+
+Os journals de quatro instalações já ocupavam 7.995.593 bytes do limite de
+8.000.000 de `profile.json`; o checkpoint seguinte falhava com
+`PROFILE_TOO_LARGE`. A configuração agora mantém resumos dos recibos e guarda
+as listas de arquivos separadamente em `content-installation-receipts`, no
+diretório persistente do host. Recibos antigos migram na próxima gravação
+autorizada. Nenhuma licença, seleção, confirmação ou nota é descartada.
+
+As listas usam arquivos privados imutáveis com SHA-256, persistidos antes da
+substituição atômica do perfil. Leitura e gravação compartilham a trava do perfil;
+apenas checkpoints sem referência são removidos. Consultas comuns não carregam
+todo o histórico. Diagnósticos internos podem pedir `includeContentFiles:true`;
+essa leitura mantém limites próprios e rejeita alterações, symlinks e hardlinks.
+Os recibos continuam sendo indícios de progresso; não concedem acesso nem
+substituem a conferência assinada do conteúdo original do vault.
+
+A entrega manual macOS 0.1.31 usa uma identidade nova. Desinstalar um
+plugin remove a instalação, mas não apaga o registro privado criado por upload;
+reutilizar o nome `oracle-system-mac-stable` em Adicionar plugin causava conflito.
+A limpeza precede a entrega e nenhuma instalação pessoal é feita automaticamente.
+
+Verificação focada: `scripts/test-profile-content-receipts.mjs`,
+`scripts/test-portable-reopen.mjs` e `scripts/test-portable-vault.mjs`.

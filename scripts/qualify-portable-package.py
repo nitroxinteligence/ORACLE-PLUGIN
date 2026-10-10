@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """Boot the actual Mac ZIP in disposable state and return its admitted payload."""
-import argparse, hashlib, json, os, pathlib, selectors, stat, subprocess, time, zipfile
+import argparse, hashlib, json, os, pathlib, re, selectors, stat, subprocess, time, zipfile
 
-def qualify(archive, output):
+def qualify(archive, output, plugin_name='oracle-system-mac-stable'):
     archive, output = pathlib.Path(archive).absolute(), pathlib.Path(output).absolute()
     if output.exists() or output.resolve() != output: raise ValueError('Fresh canonical qualification output required')
     output.mkdir(parents=True); package = output / 'package'; package.mkdir()
@@ -14,8 +14,13 @@ def qualify(archive, output):
             if path.is_absolute() or '..' in path.parts or row.filename in names or stat.S_ISLNK(mode) or row.is_dir(): raise ValueError('Unsafe plugin member')
             names.add(row.filename); roots.add(path.parts[0]); target = package / path
             target.parent.mkdir(parents=True, exist_ok=True); target.write_bytes(z.read(row)); target.chmod(mode & 0o777 or 0o644)
-        if roots != {'oracle-system-mac-stable'}: raise ValueError('Stable Mac identity required')
-    bundle = package / 'oracle-system-mac-stable'; home = output / 'home'; home.mkdir(); profile = output / 'profile'
+        if roots != {plugin_name}: raise ValueError('Explicit Mac identity required')
+    bundle = package / plugin_name
+    manifests = [json.loads((bundle / name).read_text()) for name in ['plugin.json', '.codex-plugin/plugin.json']]
+    version = manifests[0]['version']
+    if any(row['name'] != plugin_name or row['version'] != version for row in manifests): raise ValueError('Mac identity/version mismatch')
+    if plugin_name != 'oracle-system-mac-stable' and (not re.fullmatch(r'[0-9]+\.[0-9]+\.[0-9]+', version) or plugin_name != 'oracle-system-mac-' + version.replace('.', '-')): raise ValueError('Versioned manual Mac identity required')
+    home = output / 'home'; home.mkdir(); profile = output / 'profile'
     env = {'HOME': str(home), 'PATH': '/usr/bin:/bin:/usr/sbin:/sbin', 'LANG': 'en_US.UTF-8', 'ORACLE_PORTABLE_PLUGIN_DATA': str(profile)}
     p = subprocess.Popen([str(bundle / 'scripts/launch-mcp.sh')], stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE, cwd=bundle, env=env)
     requests = [{'jsonrpc': '2.0', 'id': 1, 'method': 'initialize', 'params': {'protocolVersion': '2024-11-05', 'capabilities': {}, 'clientInfo': {'name': 'oracle-compatibility-gate', 'version': '1'}}}, {'jsonrpc': '2.0', 'method': 'notifications/initialized', 'params': {}}, {'jsonrpc': '2.0', 'id': 2, 'method': 'tools/list', 'params': {}}, {'jsonrpc': '2.0', 'id': 3, 'method': 'tools/call', 'params': {'name': 'oracle_dispatch', 'arguments': {'method': 'onboardingStatus', 'params': {}}}}]
@@ -42,8 +47,8 @@ def qualify(archive, output):
     if (home / '.codex/hooks.json').exists(): raise ValueError('Unexpected hook installation at boot')
     caches = list((profile / 'runtime-cache').iterdir())
     if len(caches) != 1 or not (caches[0] / 'server.mjs').is_file(): raise ValueError('Admitted expanded tree absent')
-    receipt = {'passed': True, 'version': initial['serverInfo']['version'], 'archiveSHA256': hashlib.sha256(archive.read_bytes()).hexdigest(), 'payloadRoot': str(caches[0]), 'runtime': str(bundle / 'runtime/bun'), 'personalProfileUsed': False, 'hooksInstalled': False}
+    receipt = {'passed': True, 'version': initial['serverInfo']['version'], 'pluginName': plugin_name, 'archiveSHA256': hashlib.sha256(archive.read_bytes()).hexdigest(), 'payloadRoot': str(caches[0]), 'runtime': str(bundle / 'runtime/bun'), 'personalProfileUsed': False, 'hooksInstalled': False}
     (output / 'report.json').write_text(json.dumps(receipt, indent=2) + '\n'); return receipt
 
 if __name__ == '__main__':
-    p = argparse.ArgumentParser(description=__doc__); p.add_argument('--archive', required=True); p.add_argument('--output', required=True); a = p.parse_args(); print(json.dumps(qualify(a.archive, a.output)))
+    p = argparse.ArgumentParser(description=__doc__); p.add_argument('--archive', required=True); p.add_argument('--output', required=True); p.add_argument('--plugin-name', default='oracle-system-mac-stable'); a = p.parse_args(); print(json.dumps(qualify(a.archive, a.output, a.plugin_name)))

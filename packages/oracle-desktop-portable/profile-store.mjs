@@ -3,6 +3,7 @@ import { constants } from 'node:fs';
 import path from 'node:path';
 import { randomUUID } from 'node:crypto';
 import {acquireDirectoryProfileLock,waitForProfileLock} from './profile-write-lock.mjs';
+import {createProfileContentReceipts} from './profile-content-receipts.mjs';
 
 export async function assertPrivatePath(target, {privateFilesystem} = {}) {
   const absolute = path.resolve(target);
@@ -19,6 +20,8 @@ export async function assertPrivatePath(target, {privateFilesystem} = {}) {
 /** Private host state only. Pass the host-provided PLUGIN_DATA directory explicitly.
  * load/save/update never import an Oracle profile or turn persisted paths into grants.
  * JSON updates hold one interprocess lease across read/modify/atomic rename.
+ * File-level installation receipts live separately; ordinary loads return their
+ * compact summaries. Trusted diagnostics may request {includeContentFiles:true}.
  * save/update accept trusted {beforeCommit} synchronous admission checked before rename.
  */
 export function createProfileStore({ dataDir, platform=process.platform, privateFilesystem, acquireLock } = {}) {
@@ -27,6 +30,7 @@ export function createProfileStore({ dataDir, platform=process.platform, private
   const assertPath=target=>assertPrivatePath(target,{privateFilesystem});
   if (!dataDir || !path.isAbsolute(dataDir)) throw new Error('PLUGIN_DATA_REQUIRED');
   const root = path.resolve(dataDir);
+  const receipts=createProfileContentReceipts({root,assertPath,platform,privateFilesystem});
   const file = path.join(root, 'profile.json');
   const lockPath=path.join(root,acquireLock?'.profile-write.kernel.lock':'.profile-write.directory.lock');
   let queue = Promise.resolve();
@@ -47,7 +51,7 @@ export function createProfileStore({ dataDir, platform=process.platform, private
     if (!(await fs.lstat(root)).isDirectory()) throw new Error('PROFILE_DIRECTORY_REQUIRED');
     if(platform==='win32')await privateFilesystem.privateDirectory(root);else await fs.chmod(root, 0o700);
   }
-  async function read() {
+  async function read(options) {
     await prepare();
     let handle;
     try {
@@ -59,34 +63,48 @@ export function createProfileStore({ dataDir, platform=process.platform, private
       if(privateFilesystem)await privateFilesystem.inspect(file);
       if (!value || typeof value !== 'object' || Array.isArray(value)) throw new Error('PROFILE_INVALID');
       await assertPath(root);
-      return value;
-    } catch (error) { if (error.code === 'ENOENT') return {}; throw error; }
+      return await receipts.hydrate(value,options);
+    } catch (error) { if (error.code === 'ENOENT'&&!handle) return {}; throw error; }
     finally { await handle?.close(); }
   }
   async function write(value, { beforeCommit } = {}) {
     if (!value || typeof value !== 'object' || Array.isArray(value)) throw new Error('PROFILE_INVALID');
-    const bytes = JSON.stringify(value, null, 2) + '\n';
+    const {encoded,blobs}=receipts.encode(value);
+    const bytes = JSON.stringify(encoded, null, 2) + '\n';
     if (Buffer.byteLength(bytes) > 8_000_000) throw new Error('PROFILE_TOO_LARGE');
     await prepare();
     try { if ((await fs.lstat(file)).isSymbolicLink()) throw new Error('PROFILE_SYMLINK'); }
     catch (error) { if (error.code !== 'ENOENT') throw error; }
     const temporary = path.join(root, `.profile-${randomUUID()}.tmp`);
-    let handle;
+    const admit=()=>{
+      const result=beforeCommit?.();
+      if(result?.then)throw new Error('ASYNC_COMMIT_ADMISSION_UNSUPPORTED');
+    };
+    let handle,committed=false;
     try {
+      await receipts.persist(blobs,admit);
       handle = await fs.open(temporary, constants.O_WRONLY | constants.O_CREAT | constants.O_EXCL | noFollow, 0o600);
       if(privateFilesystem)await privateFilesystem.inspect(temporary);
       await handle.writeFile(bytes); await handle.sync(); await handle.close(); handle = null;
       await assertPath(root);
       try { if ((await fs.lstat(file)).isSymbolicLink()) throw new Error('PROFILE_SYMLINK'); }
       catch (error) { if (error.code !== 'ENOENT') throw error; }
-      if (beforeCommit) {
-        const result = beforeCommit();
-        if (result?.then) throw new Error('ASYNC_COMMIT_ADMISSION_UNSUPPORTED');
-      }
+      admit();
       await fs.rename(temporary, file);
+      committed=true;
       if(privateFilesystem)await privateFilesystem.inspect(file);
+      // Only unreferenced checkpoints are disposable. Completed journals from
+      // previous releases stay referenced and remain available through load().
+      await receipts.collect(encoded,admit).catch(()=>{});
       return structuredClone(value);
-    } finally { await handle?.close(); await fs.unlink(temporary).catch(() => {}); }
+    } finally {
+      await handle?.close();await fs.unlink(temporary).catch(() => {});
+      if(!committed&&blobs.size){
+        // A failed admission must keep the old profile readable and must not
+        // retain a large unselected checkpoint for each rejected attempt.
+        try{await receipts.collect(receipts.encode(await read()).encoded,()=>{});}catch{}
+      }
+    }
   }
   async function transaction(work){
     await prepare();
@@ -95,8 +113,8 @@ export function createProfileStore({ dataDir, platform=process.platform, private
     try{await assertPath(root);return await work();}finally{await release();}
   }
   return {
-    load: () => exclusive(read),
+    load: options => exclusive(() => transaction(()=>read(options))),
     save: (value, options) => exclusive(() => transaction(()=>write(value, options))),
-    update: (mutate, options) => exclusive(() => transaction(async()=>write(await mutate(await read()), options))),
+    update: (mutate, options) => exclusive(() => transaction(async()=>write(await mutate(await read(options)), options))),
   };
 }

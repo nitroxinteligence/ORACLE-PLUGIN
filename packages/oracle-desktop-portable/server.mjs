@@ -3,7 +3,7 @@ import {dirname,resolve} from 'node:path';
 import {fileURLToPath,pathToFileURL} from 'node:url';
 import {createUIResource} from './ui-resource.mjs';
 import {startStdio} from './stdio-transport.mjs';
-import {initializeResult,baseTools,uiMeta} from './mcp-metadata.mjs';
+import {initializeResult,baseTools,uiMetadataForVersion} from './mcp-metadata.mjs';
 export {startStdio} from './stdio-transport.mjs';
 export {uiMeta} from './mcp-metadata.mjs';
 
@@ -12,9 +12,9 @@ const object=value=>value!==null&&typeof value==='object'&&!Array.isArray(value)
 const rpcError=(message,code=-32602)=>Object.assign(new Error(message),{code});
 
 
-export function createMCPServer({dispatcher,memoryTools,aiMemoryTools,memoryWriteBroker,webRoot=resolve(root,'../../Resources/web'),icons=[],version='1.0.0'}={}) {
+export function createMCPServer({dispatcher,memoryTools,aiMemoryTools,memoryWriteBroker,webRoot=resolve(root,'../../Resources/web'),icons=[],version}={}) {
   if(typeof dispatcher?.dispatch!=='function')throw new TypeError('Dispatcher Oracle ausente.');
-  const resource=createUIResource({webRoot});
+  const interfaceMeta=uiMetadataForVersion(version),resource=createUIResource({webRoot,uri:interfaceMeta.ui.resourceUri});
   return {
     setMCPPeer:options=>memoryWriteBroker?.setTransport(options),clearMCPPeer:()=>memoryWriteBroker?.clearTransport(),
     onToolsChanged:listener=>{const remove=[memoryTools?.onChange?.(listener),aiMemoryTools?.onChange?.(listener)];return ()=>remove.forEach(fn=>fn?.());},
@@ -23,7 +23,7 @@ export function createMCPServer({dispatcher,memoryTools,aiMemoryTools,memoryWrit
       switch(method) {
         case 'initialize':return initializeResult(params,{icons,version,listChanged:!!(memoryTools?.onChange||aiMemoryTools?.onChange)});
         case 'ping':return {};
-        case 'tools/list':return {tools:[...baseTools({icons})
+        case 'tools/list':return {tools:[...baseTools({icons,version})
         ,...await memoryTools?.tools({signal:context.signal})||[],...await aiMemoryTools?.tools({signal:context.signal})||[]].map(tool=>({...tool,icons:tool.icons?.length?tool.icons:icons}))};
         case 'resources/list':{const listing=resource.list();return {...listing,resources:listing.resources.map(item=>({...item,icons}))};}
         case 'resources/read':return resource.read(params.uri);
@@ -34,7 +34,7 @@ export function createMCPServer({dispatcher,memoryTools,aiMemoryTools,memoryWrit
             if(params.name==='oracle_open'){
               if(Object.keys(args).length)throw rpcError('Esta ferramenta não aceita argumentos.');
               // Opening the resource is not a claim of license/vault readiness.
-              return {content:[{type:'text',text:'Interface Oracle disponível. O acesso será verificado ao abrir.'}],structuredContent:{value:{resourceAvailable:true}},_meta:uiMeta};
+              return {content:[{type:'text',text:'Interface Oracle disponível. O acesso será verificado ao abrir.'}],structuredContent:{value:{resourceAvailable:true}},_meta:interfaceMeta};
             }
             if(typeof params.name==='string'&&params.name.startsWith('oracle_ai_memory_')){if(!aiMemoryTools)throw rpcError('O serviço AI Memory autorizado está indisponível.');const requestID=context.requestID===undefined?undefined:String(context.requestID),hostRequestContext=memoryWriteBroker?.contextFor(params.name,args,requestID,context);return await aiMemoryTools.invoke(params.name,args,{signal:context.signal,requestID,hostRequestContext});}
             if(typeof params.name==='string'&&params.name.startsWith('oracle_memory_')){if(!memoryTools)throw rpcError('A conexão autorizada da memória está indisponível.');const requestID=context.requestID===undefined?undefined:String(context.requestID),hostRequestContext=memoryWriteBroker?.contextFor(params.name,args,requestID,context);return await memoryTools.invoke(params.name,args,{signal:context.signal,requestID,hostRequestContext});}

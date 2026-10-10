@@ -7,7 +7,7 @@ export {resourceURI} from './mcp-metadata.mjs';
 export const mimeType='text/html;profile=mcp-app';
 
 // Original assets are embedded in memory; their sources stay unchanged.
-export function createUIResource({webRoot}={}) {
+export function createUIResource({webRoot,uri:interfaceURI=resourceURI}={}) {
   if(typeof webRoot!=='string'||!webRoot)throw new Error('Pasta da interface Oracle ausente.');
   const web=realpathSync(webRoot);
 function localFile(path) {const file=resolve(web,path.split(/[?#]/)[0]);if(!file.startsWith(resolve(web)+sep))throw new Error('Recurso fora do pacote.');const actual=realpathSync(file);if(!actual.startsWith(realpathSync(web)+sep))throw new Error('Recurso fora do pacote.');return actual;}
@@ -35,10 +35,10 @@ function resourceHTML() {
 }
 
   return {
-    list(){return {resources:[{uri:resourceURI,name:'Oracle System',mimeType,_meta:{ui:{prefersBorder:false}}}]};},
+    list(){return {resources:[{uri:interfaceURI,name:'Oracle System',mimeType,_meta:{ui:{prefersBorder:false}}}]};},
     read(uri){
-      if(uri!==resourceURI)throw Object.assign(new Error('Recurso desconhecido.'),{code:-32602});
-      return {contents:[{uri:resourceURI,mimeType,text:resourceHTML(),_meta:{ui:{prefersBorder:false,csp:{connectDomains:[],resourceDomains:[]}}}}]};
+      if(uri!==interfaceURI)throw Object.assign(new Error('Recurso desconhecido.'),{code:-32602});
+      return {contents:[{uri:interfaceURI,mimeType,text:resourceHTML(),_meta:{ui:{prefersBorder:false,csp:{connectDomains:[],resourceDomains:[]}}}}]};
     }
   };
 }

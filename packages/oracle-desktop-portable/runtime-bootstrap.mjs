@@ -53,7 +53,7 @@ export function startRuntimeBootstrap({loadServer,signal,icons=[],version='1.0.0
       if(method==='initialize')return initializeResult(params,{icons,version});
       if(method==='ping')return {};
       if(admissionError)throw admissionError;
-      if(method==='tools/list'&&!server)return {tools:baseTools({icons})};
+      if(method==='tools/list'&&!server)return {tools:baseTools({icons,version})};
       const admitted=await waitFor(ready,context.signal);
       if(closed||controller.signal.aborted||context.signal?.aborted)throw cancelled();
       return admitted.request(method,params,context);

@@ -78,4 +78,24 @@ check('a lost acknowledgement recovers by ID without resending the request',!doc
 check('query stays in the updates modal and calls no installation or index action',document.querySelector('#modal').open&&document.querySelector('#modal').dataset.family==='updates'&&updateCalls.every(row=>['portableUpdateStatus','portableUpdateRequest'].includes(row.method)&&(!row.operation||row.operation==='check')));
 check('an older public release is not displayed as a downgrade and upstream qualification is clear',!document.querySelector('[data-update-channel="oracle"]').textContent.includes('→ 0.1.30')&&document.querySelector('[data-update-channel="oracle"]').textContent.includes('aguarda versão compatível do ORACLE'));
 OraclePortableUpdates.reset();
+// An older initial status can arrive after the automatic query completed.
+let releaseOldUpdateStatus,initialUpdateStatusCalls=0,queryRequests=0,automaticReceipt;
+const concurrentUpdateCall=async(method,params={})=>{
+ if(method==='portableUpdateStatus'){
+  if(!params.requestID&&++initialUpdateStatusCalls===1)return new Promise(resolve=>releaseOldUpdateStatus=resolve);
+  return params.requestID?automaticReceipt:{phase:'idle',running:false};
+ }
+ if(method==='portableUpdateRequest'){
+  queryRequests++;automaticReceipt={...updateReceipt,requestID:params.requestID,phase:'checked'};return {...automaticReceipt,phase:'checking',running:true};
+ }
+ throw Error('Unexpected updater action: '+method);
+};
+const concurrentContext={call:concurrentUpdateCall,modal,toast:()=>{},refresh:()=>{throw Error('Query cannot index');},actions,icon,statusBadge,mountMetal:mountUpdateMetal,mountBeam:mountUpdateBeam};
+const delayedUpdateOpen=OraclePortableUpdates.open(concurrentContext);
+for(let n=0;n<30&&!releaseOldUpdateStatus;n++)await wait(10);
+const automaticQuery=OraclePortableUpdates.automatic(concurrentContext);
+for(let n=0;n<100&&!document.querySelector('#portable-update-body').textContent.includes('Consulta concluída');n++)await wait(20);
+releaseOldUpdateStatus({phase:'idle',running:false});await Promise.all([delayedUpdateOpen,automaticQuery]);
+check('a delayed initial status cannot erase automatic results or trigger a duplicate query',queryRequests===1&&!document.querySelector('#portable-update-check').disabled&&document.querySelector('#portable-update-body').textContent.includes('Consulta concluída'));
+OraclePortableUpdates.reset();
 return {checks,passed:checks.filter(row=>row.pass).length,failed:checks.filter(row=>!row.pass).length,scope:'Synthetic native WKWebView restore, update query rejection and lost acknowledgement'};

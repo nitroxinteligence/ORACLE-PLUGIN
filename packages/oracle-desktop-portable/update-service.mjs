@@ -15,15 +15,21 @@ export function createPortableUpdateService(options){
  // run while an existing installation is being verified on conversation boot.
  const assertIdle=()=>{if(current?.status.running&&current.status.operation!=='check')fail('update_busy','A atualização já está em andamento.');};
  const knownStatus=id=>{if(id!==undefined&&!requestID(id))fail('invalid_update_request','Pedido inválido.');return id?(records.has(id)?structuredClone(records.get(id).status):{running:false,phase:'unknown',requestID:id}):snapshot();};
+ const remember=(id,record)=>{records.set(id,record);while(records.size>8){const disposable=[...records.keys()].find(key=>key!==record.status.requestID);records.delete(disposable);}};
  function start(params,context){
   if(Object.keys(params).some(key=>!['requestID','operation'].includes(key))||!requestID(params.requestID)||!['check','skills','oracle'].includes(params.operation))fail('invalid_update_request','Pedido de atualização inválido.');
   const prior=records.get(params.requestID);if(prior){if(prior.status.operation!==params.operation)fail('update_request_conflict','O mesmo pedido não pode mudar de ação.');return knownStatus(params.requestID);}
   if(closed)fail('update_closed','O serviço foi encerrado.');if(context.signal?.aborted)fail('operation_cancelled','Atualização cancelada.');policy.assertAdmission(context.ticket);
-  if(current?.status.running)fail('update_busy','A consulta ou atualização já está em andamento.');
+  if(current?.status.running){
+   // Automatic and explicit checks can race. Join the existing query, including
+   // its canonical ID for polling/cancel, instead of treating it as an error.
+   if(params.operation==='check'&&current.status.operation==='check'){remember(params.requestID,current);return knownStatus(params.requestID);}
+   fail('update_busy','A atualização já está em andamento.');
+  }
   if(params.operation!=='check')assertInstallerIdle();
   if(params.operation!=='check'&&context.ticket.capability!=='configure')fail('access_denied','Instalação exige autorização de configuração.');
   const selected=vault.status(),controller=new AbortController(),record={controller,status:{...snapshot(),requestID:params.requestID,operation:params.operation,running:true,phase:params.operation==='check'?'checking':'preparing',error:null,receipt:null}};
-  records.set(params.requestID,record);while(records.size>8)records.delete(records.keys().next().value);current=record;
+  remember(params.requestID,record);current=record;
   const check=()=>{policy.assertAdmission(context.ticket);if(controller.signal.aborted)fail('operation_cancelled','Atualização pausada.');if(params.operation==='skills'){const active=vault.status();if(!active.selected||active.root!==selected.root||active.generation!==selected.generation)fail('skills_vault_changed','A pasta selecionada mudou.');}};
   const scope={ticket:context.ticket,signal:controller.signal};
   record.task=Promise.resolve().then(async()=>{check();await policy.revalidateAdmission(context.ticket);check();

@@ -29,7 +29,8 @@
  }
  async function poll(expected){
   clearTimeout(timer);if(expected!==generation||!api)return;
-  try{current=await api.call('portableUpdateStatus',current?.requestID?{requestID:current.requestID}:{});if(expected!==generation)return;render();if(current.running)timer=setTimeout(()=>poll(expected),750);else if(current.phase==='complete'&&current.operation==='skills')await api.refresh();}
+  const observed=current;
+  try{const response=await api.call('portableUpdateStatus',observed?.requestID?{requestID:observed.requestID}:{});if(expected!==generation||current!==observed)return;current=response;render();if(current.running)timer=setTimeout(()=>poll(expected),750);else if(current.phase==='complete'&&current.operation==='skills')await api.refresh();}
   catch(error){if(expected===generation){api.toast(error.message,'error');timer=setTimeout(()=>poll(expected),1500);}}
  }
  async function start(operation){

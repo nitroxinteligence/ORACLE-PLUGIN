@@ -56,6 +56,18 @@ test('lost UI acknowledgement is read by request ID and does not reinstall; expl
  const f=await updateFixture(t);let installed=0,release;const blocker=new Promise(resolve=>release=resolve),updates=createPortableUpdateService({...f,skillsSource:{check:async()=>f.previous,installed:async()=>f.previous,download:async()=>({})},skillsTransaction:{install:async(_stage,{signal})=>{installed++;await blocker;if(signal.aborted)throw new Error('Stopped');return {created:0,replaced:0,unchanged:1,conflicts:[],obsoletePreserved:[],complete:true,indexComplete:true};}},pluginChannel:{check:async()=>({available:false}),apply:async()=>({installed:false})}});
  updates.start({requestID:'check_0001',operation:'check'},{ticket:f.ticket});await updates.settled();const controller=new AbortController();updates.start({requestID:'install_0001',operation:'skills'},{ticket:f.ticket,signal:controller.signal});controller.abort();await new Promise(resolve=>setImmediate(resolve));updates.start({requestID:'install_0001',operation:'skills'},{ticket:f.ticket});assert.equal(installed,1);assert.throws(()=>updates.start({requestID:'install_0001',operation:'oracle'},{ticket:f.ticket}),{code:'update_request_conflict'});updates.cancel('install_0001');release();const status=await updates.settled();assert.equal(status.phase,'paused');assert.equal(installed,1);await updates.close();
 });
+test('automatic and explicit checks share one query and canonical request ID, including lost replies and cancellation',async t=>{
+ const f=await updateFixture(t);let skillChecks=0,pluginChecks=0,release;
+ const blocker=new Promise(resolve=>release=resolve),updates=createPortableUpdateService({...f,skillsSource:{check:async()=>{skillChecks++;await blocker;return f.previous;},installed:async()=>f.previous},skillsTransaction:{install(){throw Error('A query must never install skills');}},pluginChannel:{check:async()=>{pluginChecks++;await blocker;return {available:false};}}});
+ updates.start({requestID:'automatic_check_0001',operation:'check'},{ticket:f.ticket});await new Promise(resolve=>setImmediate(resolve));
+ for(let n=0;n<12;n++){
+  const id='explicit_check_'+String(n).padStart(4,'0'),joined=updates.start({requestID:id,operation:'check'},{ticket:f.ticket});
+  assert.equal(joined.requestID,'automatic_check_0001');assert.equal(joined.running,true);assert.equal(updates.status(id).requestID,'automatic_check_0001');
+ }
+ assert.equal(updates.status('automatic_check_0001').phase,'checking');assert.equal(skillChecks,1);assert.equal(pluginChecks,1);
+ assert.throws(()=>updates.start({requestID:'install_during_check',operation:'skills'},{ticket:f.ticket}),{code:'update_busy'});
+ updates.cancel('explicit_check_0011');release();assert.equal((await updates.settled()).phase,'paused');assert.equal(updates.status('explicit_check_0011').running,false);await updates.close();
+});
 test('completed update passes authenticated catalog and preserved conflicts to local registration without a Codex account',async t=>{
  const f=await updateFixture(t),updates=createPortableUpdateService({...f,skillsSource:f.source,skillsTransaction:transaction(f),pluginChannel:{check:async()=>({available:false})},afterSkillsInstall:async context=>{
   assertSkillsRelease(context.admitted);assert.equal(context.admitted.sequence,2);assert.equal(context.ticket,f.ticket);assert.equal(context.receipt.complete,false);assert.equal(context.receipt.indexComplete,true);assert.equal((await f.profileStore.load()).skillsInstallation,undefined);context.check();return {localRegistrationCalled:true,connected:false};

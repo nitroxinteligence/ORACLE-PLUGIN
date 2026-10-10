@@ -3,7 +3,7 @@ set -eu
 portable_root=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
 case "$(/usr/bin/uname -s):$(/usr/bin/uname -m)" in
   Darwin:arm64) ;;
-  *) echo 'Este experimento requer macOS Apple Silicon.' >&2; exit 1 ;;
+  *) echo 'Oracle System requer macOS Apple Silicon.' >&2; exit 1 ;;
 esac
 portable_data=${ORACLE_PORTABLE_PLUGIN_DATA:-${PLUGIN_DATA:-}}
 case "$portable_data" in

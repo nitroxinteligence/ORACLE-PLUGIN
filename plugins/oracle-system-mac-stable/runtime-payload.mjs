@@ -103,14 +103,19 @@ if(process.argv[1]&&import.meta.url===pathToFileURL(resolve(process.argv[1])).hr
     const version=JSON.parse(readMetadata('plugin.json',64_000)).version;
     const icons=[{src:`data:image/png;base64,${readMetadata('assets/icon-mono.png',5_000_000).toString('base64')}`,mimeType:'image/png',sizes:['1254x1254']}];
     startRuntimeBootstrap({signal:controller.signal,icons,version,onError:report,loadServer:async({signal})=>{
-      const root=await materializeRuntime({packageRoot,dataDir:process.env.ORACLE_PORTABLE_PLUGIN_DATA||process.env.PLUGIN_DATA,signal});
+      const dataDir=process.env.ORACLE_PORTABLE_PLUGIN_DATA||process.env.PLUGIN_DATA;
+      let root=await materializeRuntime({packageRoot,dataDir,signal}),activeVersion=version;
+      const {createPluginRuntimeUpdates}=await import(pathToFileURL(join(root,'plugin-runtime-updates.mjs')).href);
+      const {loadReviewedContentTrust}=await import(pathToFileURL(join(root,'content-admission.mjs')).href);
+      const selected=await createPluginRuntimeUpdates({dataDir,trust:loadReviewedContentTrust(join(root,'resources')),bundleVersion:version}).selected({check:()=>{if(signal.aborted)fail('cancelado');}});
+      if(selected){root=await materializeRuntime({packageRoot:selected.packageRoot,dataDir,signal});activeVersion=selected.version;}
       trace('materialize.ready');
       if(signal.aborted)fail('cancelado');
       process.chdir(root);
       const server=await import(pathToFileURL(join(root,'server.mjs')).href);
       trace('server.imported');
       if(signal.aborted)fail('cancelado');
-      const handler=await server.createPortableServer({signal,icons,version,hostPackageRoot:packageRoot});
+      const handler=await server.createPortableServer({signal,icons,version:activeVersion,hostPackageRoot:packageRoot});
       trace('server.ready');
       return handler;
     }});

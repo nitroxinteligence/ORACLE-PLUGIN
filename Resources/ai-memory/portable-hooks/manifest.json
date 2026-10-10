@@ -1,11 +1,11 @@
 {
-  "version": "2.5.2",
-  "commit": "7580b74d0fb9d14a6d949dc92f5ea8bb7feb3c83",
+  "version": "2.6.3",
+  "commit": "385b81ea95f7b73ede7146d0ae606c4caa7b43c1",
   "files": [
     {
       "path": "_lib.sh",
-      "bytes": 40936,
-      "sha256": "050b24ea52e1cc99135467bbeffbc7982adb6bdd2c3b4d2ccb679660a500ed83"
+      "bytes": 55214,
+      "sha256": "d2f322a0a2527599569599ad5b30d4413ad148b721b70c8ad3d97e3d86e81d90"
     },
     {
       "path": "codex/post-tool-use.ps1",
@@ -79,8 +79,8 @@
     },
     {
       "path": "lib/ai-memory-hook.ps1",
-      "bytes": 27324,
-      "sha256": "27936c820a112986e1385e7bff218075929d6aaa1780b8923115015b6ab2b15b"
+      "bytes": 56286,
+      "sha256": "861ec1f3d34337f57260afc62e0128977184382ca1922efa688af2df076d862a"
     }
   ]
 }

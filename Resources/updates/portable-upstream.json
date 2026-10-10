@@ -64,8 +64,8 @@
     }
   },
   "gbrain": {
-    "commit": "3bdf17f3b7b97568e59c5a4956c8b7429012353b",
-    "methodManifestSHA256": "ee203866336b4454b5bc729f959ba50a5599b71649c884429681ee12015c0220",
+    "commit": "9be2f28d4a1159f3656efc434443caed56095161",
+    "methodManifestSHA256": "210c863a793b173b05eb203d6a5922b71639c580d6d3d62eedb0fc28e8fcb4af",
     "native": {
       "darwin-arm64": {
         "bytes": 70512,
@@ -79,14 +79,15 @@
       }
     },
     "repository": "garrytan/gbrain",
-    "version": "0.60.151.0"
+    "version": "0.60.152.0"
   },
   "gbrainHistory": [
     "2efaaf8f8a817b5b82e023383618fdcdb1cc5f7d",
     "8c9a8e9a480c388cf7a87dc0c48dd0d56e6c4bb3",
     "c9ba778235fb2da921acd22dc3f92527f5072258",
     "67c4ff27bd0a5a8a02ccb66cd663d3aa1daf9969",
-    "e7f59913e34667d883ea68bcd7236c0e4a6d5b8e"
+    "e7f59913e34667d883ea68bcd7236c0e4a6d5b8e",
+    "3bdf17f3b7b97568e59c5a4956c8b7429012353b"
   ],
   "schemaVersion": 1
 }

@@ -24,6 +24,7 @@ def mirror(destination):
         mapping[path] = ROOT / path
     for source in sorted((ROOT / 'Resources/ai-memory').glob('portable-schema-v*.json')): mapping[source.relative_to(ROOT).as_posix()] = source
     for name in SCRIPTS: mapping['scripts/' + name] = ROOT / 'scripts' / name
+    mapping['scripts/test-portable-component-updates.mjs'] = ROOT / 'scripts/test-portable-component-updates.mjs'
     mapping['docs/implementation/portable-reopen-20261005.md'] = ROOT / 'docs/implementation/portable-reopen-20261005.md'
     mapping['.github/workflows/portable-release.yml'] = ROOT / 'distribution/portable/workflows/release.yml'
     mapping['README.md'] = ROOT / 'distribution/portable/README.md'

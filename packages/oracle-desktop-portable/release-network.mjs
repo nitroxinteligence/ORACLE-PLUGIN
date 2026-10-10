@@ -2,7 +2,7 @@ const fail=(code,message)=>{throw Object.assign(new Error(message),{code});};
 const hosts=new Set(['api.github.com','github.com','release-assets.githubusercontent.com','objects.githubusercontent.com','raw.githubusercontent.com']);
 /** Fixed publisher origins; callers supply trusted release URLs, never RPC. */
 export async function releaseBytes(url,{maximum,expectedBytes,fetchImpl=globalThis.fetch,signal,check=()=>{},timeoutMS=120000,redirects=true}={}){
- if(!Number.isSafeInteger(maximum)||maximum<1||maximum>44000000)fail('release_limit','Limite de download inválido.');
+ if(!Number.isSafeInteger(maximum)||maximum<1||maximum>=100000000)fail('release_limit','Limite de download inválido.');
  const controller=new AbortController(),abort=()=>controller.abort();signal?.addEventListener('abort',abort,{once:true});if(signal?.aborted)abort();const deadline=setTimeout(abort,timeoutMS);let reader;
  try{
   let response;for(let hop=0;hop<=4;hop++){

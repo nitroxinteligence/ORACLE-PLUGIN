@@ -5,6 +5,7 @@ import { admittedManifestForPlan } from './content-installation-plan.mjs';
 import { loadAdmittedContentFile, verifyContentFile } from './content-admission.mjs';
 import {upgradeReadableSkillMetadata} from './readable-skill-metadata-upgrade.mjs';
 import {restorePrivateMethod} from './private-method-restore.mjs';
+import {assertSkillsRelease,verifySkillsFile} from './skills-release-admission.mjs';
 const fail = code => { throw Object.assign(new Error(code), { code }); };
 const sha = bytes => createHash('sha256').update(bytes).digest('hex');
 const same = (a,b) => a.dev === b.dev && a.ino === b.ino;
@@ -71,7 +72,7 @@ export function createVaultContentTransaction({ vault, policy, profileStore, dat
   if (!vault?.withContentTransaction || !policy?.requireCapability || !policy?.assertAdmission || !policy?.revalidateAdmission || !profileStore?.update) fail('content_transaction_provider_required');
   if (typeof dataDir !== 'string' || resolve(dataDir)!==dataDir) fail('private_content_root_required');
   return Object.freeze({
-    verify(plan,{payloadRoot,signal}={}){
+    verify(plan,{payloadRoot,signal,updatedSkills}={}){
       const admitted=admittedManifestForPlan(plan),ticket=policy.requireCapability('configure');
       return vault.withContentReadScope(async grant=>{
         const check=()=>{grant.check();policy.assertAdmission(ticket);if(signal?.aborted)fail('content_install_cancelled');};
@@ -84,7 +85,10 @@ export function createVaultContentTransaction({ vault, policy, profileStore, dat
         }};
         // Read back every existing vault file before creating any derived
         // cache. A changed or missing note must remain an explicit conflict.
-        await verifyEntries(plan.entries.filter(entry=>entry.scope==='vault'));
+        if(updatedSkills){
+          assertSkillsRelease(updatedSkills);
+          for(const row of updatedSkills.files){check();const target=existingPathUnder(grant.root,row.path,check),parent=directory(dirname(target));verifySkillsFile(updatedSkills,row.path,checkedBytes(target,row.size));if(!same(parent,directory(dirname(target))))fail('content_parent_changed');}
+        }else await verifyEntries(plan.entries.filter(entry=>entry.scope==='vault'));
         let methodMigrated=false;
         try{directory(methodRoot);}catch(error){
           if(error.code!=='ENOENT')throw error;

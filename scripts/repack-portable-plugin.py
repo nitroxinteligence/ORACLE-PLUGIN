@@ -27,6 +27,9 @@ ALLOWED_REPLACEMENTS = frozenset({
     'official-hooks-installer.mjs', 'onboarding-coordinator.mjs', 'memory-consent.mjs', 'maintenance-policy.mjs', 'server.mjs', 'runtime-payload.mjs',
     'codex-connection-provider.mjs', 'onboarding-status.mjs', 'catalog-snapshot.mjs', 'service.mjs', 'runtime-cache-lock.mjs',
     'vault-service.mjs', 'knowledge-service.mjs', 'gbrain-source-runner.mjs',
+    'update-service.mjs', 'plugin-update-channel.mjs', 'plugin-runtime-updates.mjs', 'plugin-package-archive.mjs', 'component-update-check.mjs', 'release-network.mjs',
+    'resources/web/portable-updates.js',
+    'resources/updates/portable-upstream.json', 'skills-release-source.mjs',
     'gbrain-mcp-session.mjs', 'official-memory-relay.mjs',
     'resources/web/app.js', 'resources/web/flat-universe.js', 'ui-resource.mjs',
     'runtime-bootstrap.mjs', 'stdio-transport.mjs', 'mcp-metadata.mjs', 'scripts/launch-mcp.sh',
@@ -40,7 +43,7 @@ RETIRED_PATHS = frozenset({'resources/web/library.js', 'resources/web/library-ga
     'resources/web/preview-gallery-graph.png', 'resources/web/preview-gallery-knowledge.png',
     *(f'resources/web/gallery/metallic-{i:02d}.webp' for i in range(1, 7))})
 NEW_BOOTSTRAP_EXTERNALS = frozenset({'runtime-cache-lock.mjs', 'runtime-bootstrap.mjs', 'stdio-transport.mjs', 'mcp-metadata.mjs', 'runtime-binary-source.mjs'})
-SHARED_BOOTSTRAP_MODULES = frozenset({'stdio-transport.mjs', 'mcp-metadata.mjs'})
+SHARED_BOOTSTRAP_MODULES = frozenset({'stdio-transport.mjs', 'mcp-metadata.mjs', 'runtime-cache-lock.mjs'})
 
 
 

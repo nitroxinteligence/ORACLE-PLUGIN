@@ -35,6 +35,7 @@ import {createPortableContentSource} from './content-source-composition.mjs';
 import {createPortableAccessGrantResolver} from './access-grant-composition.mjs';
 import {createKnowledgeInterviewService} from './knowledge-interview-service.mjs';
 import {createPortableUpdateService} from './update-service.mjs';
+import {createSkillsReleaseSource} from './skills-release-source.mjs';
 import {GBRAIN_SOURCE_PIN} from './gbrain-source-runner.mjs';
 
 const fail=(code,message)=>{throw Object.assign(new Error(message),{code});};
@@ -172,7 +173,17 @@ export async function createService({root,hostPackageRoot,dataDir=process.env.OR
   const registerUserSkills=createCodexUserSkillsRegistration({policy,vault,...(codexUserHome===undefined?{}:{userHome:codexUserHome})});
   let installedSkillsSource=null;
   const admittedContentSource=typeof contentSourceProvider==='function'?async options=>{const source=await contentSourceProvider(options);if(pendingMemoryInstallation)await memoryConsent.admitInstallation(pendingMemoryInstallation,source.admitted,options);codexInstallationProvider.admit?.(source,options);installedSkillsSource=source.skills;return source;}:null;
-  if(admittedContentSource&&typeof contentSourceProvider.verifyInstalled==='function')admittedContentSource.verifyInstalled=async options=>{const source=await contentSourceProvider.verifyInstalled(options);codexInstallationProvider.admit?.(source,options);installedSkillsSource=source.skills;return source;};
+  if(admittedContentSource&&typeof contentSourceProvider.verifyInstalled==='function')admittedContentSource.verifyInstalled=async options=>{
+    let source=await contentSourceProvider.verifyInstalled(options);
+    // Restore the independently updated signed corpus, not the old bundled
+    // skills. Otherwise the next conversation rejects a successful update.
+    const currentProfile=await profileStore.load();
+    if(currentProfile.skillsInstallation?.complete===true&&currentProfile.skillsInstallation.vault===vault.status().root){
+      const skills=await createSkillsReleaseSource({bundleRoot:resolve(root),dataDir,policy,vault,profileStore,privateFilesystem}).installed();
+      source={...source,skills,updatedSkills:skills};
+    }
+    codexInstallationProvider.admit?.(source,options);installedSkillsSource=source.skills;return source;
+  };
   const afterLocalVerification=async({ticket,signal,check,restoring=false})=>{
     if(restoring){
       let registration;try{registration=await registerUserSkills.verifyExisting({admitted:installedSkillsSource,ticket,signal,check});}
@@ -212,7 +223,7 @@ export async function createService({root,hostPackageRoot,dataDir=process.env.OR
     let discoveryVerified=false;try{if(account?.connected&&account?.explicitAuthorization&&skillsDiscoveryReceipt){skillsRouting.assertCurrent(skillsDiscoveryReceipt);discoveryVerified=true;}}catch{skillsDiscoveryReceipt=null;}
     // Consent snapshot is live and cannot restore authorization from a journal.
     const consent=memoryConsent.snapshot();let maintenanceRequested=false;try{maintenanceRequested=memoryConsent.captureChoices().enabled===true;}catch{}
-    return onboardingStatus({policy,vault,vaultRecovery:vaultRestoration.snapshot(),preferences:(await profileStore.load()).preferences||{},knowledge:knowledge.syncSnapshot(),coordinator:coordinator?.snapshot(),operation:installationOperation.snapshot(),runID:installationRunID,
+    return onboardingStatus({policy,vault,vaultRecovery:vaultRestoration.snapshot(),preferences:(await profileStore.load()).preferences||{},knowledge:knowledge.syncSnapshot(),coordinator:coordinator?.snapshot(),operation:installationOperation.snapshot(),runID:installationRunID,restoringExisting:restorationRequested,
       integration:{officialHooks:officialHooksReceipt,connected:account?.connected===true&&account?.explicitAuthorization===true,discoveryVerified,captureRequested:consent.captureRequested,maintenanceRequested}});
   };
   const startInstallation=(action,context)=>{
@@ -284,7 +295,7 @@ export async function createService({root,hostPackageRoot,dataDir=process.env.OR
 saveVersion:async(p,c)=>{if(Object.keys(p).some(key=>!['path','hash','text'].includes(key)))fail('invalid_request','Versão inválida.');cancelMemory();knowledge.cancel();try{return await vault.saveVersion({path:p.path,expectedRevision:p.hash,content:p.text},{signal:c.signal});}finally{knowledge.cancel();}},reveal:(p,c)=>{if(Object.keys(p).some(key=>key!=='path'))fail('invalid_request','Arquivo inválido.');return vault.revealNote(p.path,{signal:c.signal});},exportSnapshotBegin:(p,c)=>exportHandler('begin',p,c),exportSnapshotChunk:(p,c)=>exportHandler('chunk',p,c),exportSnapshotDiscard:(p,c)=>exportHandler('discard',p,c),exportSnapshot:finishExport,onboardingContentPlan:(p,c)=>localContent('plan',p,c),onboardingContentInstall:(p,c)=>localContent('install',p,c),onboardingContentResume:(p,c)=>localContent('resume',p,c),onboardingContentStatus:(p,c)=>localContent('status',p,c),chooseVault,onboardingChooseVault:chooseVault,
     boot:async p=>{noArgs(p);await vaultRestoration.ensure();return {locked:policy.snapshot().blocked,accessibility:{}};},
     onboardingStatus:async p=>{noArgs(p);return status();},
-    snapshot:async p=>{noArgs(p);await vaultRestoration.ensure();const value=await createSnapshot({policy,vault,profileStore,catalog,dataDir,knowledge,libraryPending:installationOperation.snapshot()?.running===true||coordinator?.snapshot().running===true||updates?.snapshot().running===true});value.features.portableUpdates=!!updates;value.onboarding=await status();return value;},
+    snapshot:async p=>{noArgs(p);await vaultRestoration.ensure();const update=updates?.snapshot();const value=await createSnapshot({policy,vault,profileStore,catalog,dataDir,knowledge,libraryPending:!restorationRequested&&(installationOperation.snapshot()?.running===true||coordinator?.snapshot().running===true)||update?.running===true&&update.operation==='skills'});value.features.portableUpdates=!!updates;value.onboarding=await status();return value;},
     onboardingActivate:async(p,c)=>{
       if(Object.keys(p).some(key=>key!=='code')||typeof p.code!=='string')fail('invalid_access_key','Confira sua chave de acesso.');
       if(policy.snapshot().blocked)fail('access_denied','Reabra o Oracle antes de ativar.');

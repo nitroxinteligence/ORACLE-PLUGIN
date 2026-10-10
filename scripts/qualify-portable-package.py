@@ -23,7 +23,7 @@ def qualify(archive, output, plugin_name='oracle-system-mac-stable'):
     if any(len(row.get('mcpServers', {})) != 1 for row in configurations): raise ValueError('Single reviewed MCP namespace required')
     if tuple(map(int, version.split('.'))) >= (0, 1, 32) and any(list(row['mcpServers']) != [plugin_name] for row in configurations): raise ValueError('MCP namespace must match plugin identity')
     if configurations[0]['mcpServers'] != configurations[1]['mcpServers']: raise ValueError('Portable and legacy MCP configuration mismatch')
-    if plugin_name != 'oracle-system-mac-stable' and (not re.fullmatch(r'[0-9]+\.[0-9]+\.[0-9]+', version) or plugin_name != 'oracle-system-mac-' + version.replace('.', '-')): raise ValueError('Versioned manual Mac identity required')
+    if plugin_name not in {'oracle-system-mac-stable', 'oracle-system-mac-0-1-32'} and (not re.fullmatch(r'[0-9]+\.[0-9]+\.[0-9]+', version) or plugin_name != 'oracle-system-mac-' + version.replace('.', '-')): raise ValueError('Reviewed manual Mac identity required')
     home = output / 'home'; home.mkdir(); profile = output / 'profile'
     env = {'HOME': str(home), 'PATH': '/usr/bin:/bin:/usr/sbin:/sbin', 'LANG': 'en_US.UTF-8', 'ORACLE_PORTABLE_PLUGIN_DATA': str(profile)}
     p = subprocess.Popen([str(bundle / 'scripts/launch-mcp.sh')], stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE, cwd=bundle, env=env)

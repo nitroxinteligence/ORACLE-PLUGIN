@@ -118,7 +118,7 @@ let departmentCatalogKey=null,departmentCatalogCache=null;
 function departmentCatalog(){
  const root=state.config.libraryRoots?.skills||'SISTEMA/skills',entries=visibleEntries().filter(e=>e.path===root||e.path.startsWith(root+'/'));
  const manifest=state.departmentManifest||window.OracleDepartmentManifest,assignments={...state.distributionDepartmentAssignments,...state.config.departmentAssignments};
- const forming=!!state.onboarding?.runID&&state.onboarding.profileMode==='memory-only'&&state.onboarding.status!=='completed';
+ const forming=!!state.onboarding?.runID&&!state.onboarding.restoringExisting&&state.onboarding.profileMode==='memory-only'&&state.onboarding.status!=='completed';
  const key=JSON.stringify([state.collections,entries.map(e=>[e.path,e.name,!!e.directory]),manifest,assignments,root,forming]);
  if(key!==departmentCatalogKey){departmentCatalogCache=OracleDepartments.createCatalog(state.collections,entries,manifest,assignments,root,forming);departmentCatalogKey=key;}
  return departmentCatalogCache;

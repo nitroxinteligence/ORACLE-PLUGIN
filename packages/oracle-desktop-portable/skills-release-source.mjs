@@ -19,7 +19,9 @@ export function createSkillsReleaseSource({bundleRoot,dataDir,policy,profileStor
    if(!/^[a-f0-9]{64}$/.test(record.manifestSHA256??''))fail('invalid_skills_receipt','Recibo de acervo inválido.');
    const path=join(dataDir,'skills-manifests',record.manifestSHA256+'.json');await assertPrivatePath(path,{privateFilesystem});const info=await fs.lstat(path);if(!info.isFile()||info.nlink!==1||info.size>24000000)fail('invalid_skills_receipt','Manifesto instalado irregular.');
    const bytes=await fs.readFile(path);if(skillsSHA(bytes)!==record.manifestSHA256)fail('invalid_skills_receipt','Manifesto instalado mudou.');
-   return admitSkillsRelease(bytes,{trust,minimumSequence:Math.max(bundled.sequence,record.sequence||0),knownManifestSHA256:record.manifestSHA256});
+   // A newer executable bundle is not proof that its corpus was installed.
+   // Keep the actual signed installed version until the skills transaction ends.
+   return admitSkillsRelease(bytes,{trust,minimumSequence:record.sequence||0,knownManifestSHA256:record.manifestSHA256});
   },
   async check(options){await policy.revalidateAdmission(options.ticket);check(options);const bundled=await baseline(),profile=await profileStore.load(),prior=profile.skillsFeed||{};
    const release=await latestRelease(repository,{fetchImpl,signal:options.signal,check:()=>check(options)}),assets=release.assets.filter(row=>row.name==='oracle-distribution.json');

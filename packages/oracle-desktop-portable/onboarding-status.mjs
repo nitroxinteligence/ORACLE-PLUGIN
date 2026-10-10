@@ -2,7 +2,7 @@ import {assertOnboardingAIMemoryReceipt} from './onboarding-ai-memory.mjs';
 import {basename} from 'node:path';
 import {assertAIMemoryInstallationReceipt} from './ai-memory-installation-verifier.mjs';
 
-export function onboardingStatus({policy,vault,preferences={},knowledge,coordinator,operation,runID,integration={},vaultRecovery}) {
+export function onboardingStatus({policy,vault,preferences={},knowledge,coordinator,operation,runID,integration={},vaultRecovery,restoringExisting=false}) {
   const access=policy.snapshot(),selection=vault.status(),licensed=access.active;
   const recoveryFailed=licensed&&!selection.selected&&vaultRecovery?.savedSelection===true&&vaultRecovery.state==='failed';
   const local=licensed&&selection.selected?coordinator:null;
@@ -43,6 +43,8 @@ export function onboardingStatus({policy,vault,preferences={},knowledge,coordina
     vaultName:licensed&&selection.selected?basename(selection.root):'',
     ...(licensed?{vaultPath:selection.root||''}:{}),
     vaultSelectionRevision:String(selection.generation),resumeExisting:localInstallationVerified&&local?.restored===true,
+    // Presentation context only, never installation proof or authorization.
+    restoringExisting:licensed&&selection.selected&&restoringExisting===true&&running&&!operation?.cancelled&&!operation?.error,
     hasExistingBrain:false,codexConnected:integration.connected===true,codexRuntime:{runtimeReady:false,skillDiscoveredByCodex:integration.discoveryVerified===true,status:integration.discoveryVerified===true?'discovered':integration.connected===true?'connected':'not_verified'},
     deviceSupport:{supported:false,kind:null,reason:'A ativação vinculada ao aparelho ainda não está disponível nesta instalação.'},
     confirmed,completed:progress.completed,total:progress.total,hooksTrusted:false,captureReady:false,

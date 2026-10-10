@@ -11,12 +11,16 @@ export function createPortableUpdateService(options){
  const source=options.skillsSource||createSkillsReleaseSource(options),transaction=options.skillsTransaction||createSkillsUpdateTransaction(options),plugin=options.pluginChannel||createPluginUpdateChannel(options);
  let latestSkills=null,current=null,closed=false;const records=new Map();
  const snapshot=()=>current?structuredClone(current.status):{running:false,phase:'idle',skills:null,oracle:null};
- const assertIdle=()=>{if(current?.status.running)fail('update_busy','A atualização já está em andamento.');assertInstallerIdle();};
+ // Feed checks never write the vault or replace executable files. They may
+ // run while an existing installation is being verified on conversation boot.
+ const assertIdle=()=>{if(current?.status.running&&current.status.operation!=='check')fail('update_busy','A atualização já está em andamento.');};
  const knownStatus=id=>{if(id!==undefined&&!requestID(id))fail('invalid_update_request','Pedido inválido.');return id?(records.has(id)?structuredClone(records.get(id).status):{running:false,phase:'unknown',requestID:id}):snapshot();};
  function start(params,context){
   if(Object.keys(params).some(key=>!['requestID','operation'].includes(key))||!requestID(params.requestID)||!['check','skills','oracle'].includes(params.operation))fail('invalid_update_request','Pedido de atualização inválido.');
   const prior=records.get(params.requestID);if(prior){if(prior.status.operation!==params.operation)fail('update_request_conflict','O mesmo pedido não pode mudar de ação.');return knownStatus(params.requestID);}
-  if(closed)fail('update_closed','O serviço foi encerrado.');if(context.signal?.aborted)fail('operation_cancelled','Atualização cancelada.');policy.assertAdmission(context.ticket);assertIdle();
+  if(closed)fail('update_closed','O serviço foi encerrado.');if(context.signal?.aborted)fail('operation_cancelled','Atualização cancelada.');policy.assertAdmission(context.ticket);
+  if(current?.status.running)fail('update_busy','A consulta ou atualização já está em andamento.');
+  if(params.operation!=='check')assertInstallerIdle();
   if(params.operation!=='check'&&context.ticket.capability!=='configure')fail('access_denied','Instalação exige autorização de configuração.');
   const selected=vault.status(),controller=new AbortController(),record={controller,status:{...snapshot(),requestID:params.requestID,operation:params.operation,running:true,phase:params.operation==='check'?'checking':'preparing',error:null,receipt:null}};
   records.set(params.requestID,record);while(records.size>8)records.delete(records.keys().next().value);current=record;

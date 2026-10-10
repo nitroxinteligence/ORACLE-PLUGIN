@@ -8,7 +8,7 @@
   let integration={enabled:true,autoCapture:false,remoteProcessing:false,hour:15,timezone:Intl.DateTimeFormat().resolvedOptions().timeZone};
   const needsRecovery=value=>value.licensed&&!['starting','running','cancelling','completed'].includes(value.status)&&(value.libraryRootChoices?.length||value.distributionConflicts?.length);
   const needsVaultRecovery=value=>value.licensed&&value.vaultRecovery?.state==='failed'&&value.vaultRecovery.savedSelection===true;
-  const stageFor=value=>!value.licensed?'license':needsVaultRecovery(value)?'progress':value.resumeExisting?'completed':value.runID?(value.status==='completed'?'completed':'progress'):value.hasVault&&value.ui?.step==='install'?'install':'vault';
+  const stageFor=value=>!value.licensed?'license':needsVaultRecovery(value)?'progress':value.resumeExisting||value.restoringExisting?'completed':value.runID?(value.status==='completed'?'completed':'progress'):value.hasVault&&value.ui?.step==='install'?'install':'vault';
   const motionHandles=new Set();
   const esc=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
   const logo=()=>'<span class="ob2-logo metallic-lockup" role="img" aria-label="Oracle"><img class="metallic-symbol" src="brand/oracle-planet-chrome-v1.png" alt=""><img class="metallic-wordmark" src="brand/lockup-white.svg" alt=""></span>';
@@ -139,7 +139,7 @@
     const portableIntegration=integrating&&Array.isArray(current.integrationActions);
     const recovering=needsVaultRecovery(current);
     const installing=recovering||repair||!!current.runID&&(current.status!=='completed'||integrating)&&!current.resumeExisting;
-    const visible=installing&&!screen.open&&!(portableIntegration&&!repair&&(!current.integrationActions.length||dismissedIntegrations.has(integrationKey())));
+    const visible=installing&&!current.restoringExisting&&!screen.open&&!(portableIntegration&&!repair&&(!current.integrationActions.length||dismissedIntegrations.has(integrationKey())));
     if(!visible){progress.hidden=true;clean(progress);return;}
     const wasHidden=progress.hidden;progress.hidden=false;progress.classList.toggle('ob2-integrating',integrating);
     positionProgress();if(wasHidden){effects().beam(progress.querySelector('.ob2-beam'));void animate(progress,[{opacity:0},{opacity:1}],300);}
@@ -219,7 +219,7 @@
     positionProgress();
   }
 
-  const progressSignature=value=>JSON.stringify([value.runID,value.status,value.phase,value.message,value.installationError,value.vaultRecovery,value.installationCompleted,value.resumeExisting,value.installationProgress,value.confirmed,value.integrationPending,value.integrationActions,value.bridgeNeedsReprepare]);
+  const progressSignature=value=>JSON.stringify([value.runID,value.status,value.phase,value.message,value.installationError,value.vaultRecovery,value.installationCompleted,value.resumeExisting,value.restoringExisting,value.installationProgress,value.confirmed,value.integrationPending,value.integrationActions,value.bridgeNeedsReprepare]);
   function receiveStatus(value){
     const previousHasVault=current.hasVault,previousDestination=destination(current),before=progressSignature(current);current=value;statusRevision++;
     if(stage==='install'&&previousDestination!==destination(current)){if(destination(current))updateDestination();else show(needsVaultRecovery(current)?'progress':'vault');}

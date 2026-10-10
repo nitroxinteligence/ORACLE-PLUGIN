@@ -9,7 +9,7 @@
     if(state.setup?.plan_id===runID&&Array.isArray(state.setupBaselinePaths))baseline=new Set(state.setupBaselinePaths);
     const awaitingSetup=progress.legacyAccess===false&&(progress.licensed===false||['not_started','configuring','review'].includes(progress.status));
     if(awaitingSetup)return {entries:state.entries,collections:[],connectors:[],coreReady:false,forming:false};
-    const forming=!!progress.runID&&!['completed','not_started','configuring','review'].includes(progress.status);
+    const forming=!!progress.runID&&!progress.restoringExisting&&!['completed','not_started','configuring','review'].includes(progress.status);
     const confirmed=progress.confirmed||[],sources=confirmed.filter(c=>c.kind==='connector');
     if(!forming)return {entries:state.entries,collections:state.collections,connectors:[],coreReady:true,forming:false};
     const verified=new Set(confirmed.filter(c=>c.kind==='skill').map(c=>c.path||c.id));

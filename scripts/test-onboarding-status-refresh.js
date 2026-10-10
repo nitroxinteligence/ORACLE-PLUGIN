@@ -35,6 +35,11 @@ releaseRefresh?.();await Promise.all([first,second]);
 check('the map remains available after verification finishes',!!document.querySelector('#atlas svg')&&!document.querySelector('.ob2-screen').open);
 check('completion uses only read-only status and snapshot calls',calls.every(method=>['onboardingStatus','snapshot'].includes(method)));
 check('completion produces no spurious error',toasts.length===0);
+OracleOnboarding.suspend();status={...running,phase:'indexing',restoringExisting:true};snapshotStatus={...status};await mount(refresh);
+check('existing installation verification keeps the map and update controls visible',panel.hidden&&!document.querySelector('.ob2-screen').open&&!!document.querySelector('#atlas svg'));
+check('background verification never claims installation or hook completion',!OracleOnboarding.getState().installationCompleted&&!OracleOnboarding.getState().resumeExisting&&!OracleOnboarding.getState().hooksTrusted);
+status={...status,restoringExisting:false,status:'failed',message:'Synthetic readback failure',installationError:{code:'content_existing_conflict'}};await OracleOnboarding.poll();
+check('failed background readback remains visible and recoverable',!panel.hidden&&panel.textContent.includes('Synthetic readback failure'));
 // A previously configured vault can fail to acquire its OS lease. That is a
 // recovery state, even before there is a live runID in this process.
 OracleOnboarding.suspend();
@@ -53,4 +58,24 @@ for(let i=0;i<40&&!panel.hidden;i++)await wait(20);
 check('retry recovers the existing vault and closes the notice',panel.hidden&&!document.querySelector('.ob2-screen').open&&OracleOnboarding.getState().resumeExisting===true);
 check('recovery does not call installation, permissions or the picker',recoveryCalls.includes('onboardingResume')&&recoveryCalls.every(method=>['onboardingStatus','snapshot','onboardingResume'].includes(method)));
 OracleOnboarding.suspend();
-return {checks,passed:checks.filter(row=>row.pass).length,failed:checks.filter(row=>!row.pass).length,scope:'Synthetic native WKWebView snapshot completion and delayed polling'};
+// Exercise the real updates controls with rejected admission and a lost reply.
+const updateCalls=[];let updateMode='reject',updateReceipt=null;
+const updateCall=async(method,params)=>{
+ updateCalls.push({method,...params});
+ if(method==='portableUpdateRequest'){
+  if(updateMode==='reject')throw Object.assign(Error('Synthetic installation busy'),{code:'installation_in_progress'});
+  updateReceipt={requestID:params.requestID,operation:params.operation,phase:'complete',running:false,skills:{currentReleaseID:'skills-7',latestReleaseID:'skills-7',available:false},oracle:{currentVersion:'0.1.33',latestVersion:'0.1.30',available:false,components:{gbrain:{currentVersion:'0.60.94.0',latestVersion:'0.60.150.0',available:true,qualified:false}}}};
+  throw Error('Synthetic lost acknowledgement');
+ }
+ if(method==='portableUpdateStatus')return params.requestID?updateReceipt?.requestID===params.requestID?updateReceipt:{phase:'unknown',running:false}:{phase:'idle',running:false};
+ throw Error('Unexpected updater action: '+method);
+};
+await OraclePortableUpdates.open({call:updateCall,modal,toast:()=>{},refresh:()=>{throw Error('Query must not refresh the index');},actions,icon,statusBadge,mountMetal:mountUpdateMetal,mountBeam:mountUpdateBeam});
+check('a rejected check unlocks Verificar and preserves both source cards',!document.querySelector('#portable-update-check').disabled&&document.querySelectorAll('[data-update-channel]').length===2&&document.querySelector('#portable-update-body').textContent.includes('Synthetic installation busy'));
+updateMode='lost-ack';document.querySelector('#portable-update-check').click();
+for(let n=0;n<40&&document.querySelector('#portable-update-check').disabled;n++)await wait(20);
+check('a lost acknowledgement recovers by ID without resending the request',!document.querySelector('#portable-update-check').disabled&&updateCalls.filter(row=>row.method==='portableUpdateRequest').length===2&&document.querySelector('#portable-update-body').textContent.includes('Consulta concluída'));
+check('query stays in the updates modal and calls no installation or index action',document.querySelector('#modal').open&&document.querySelector('#modal').dataset.family==='updates'&&updateCalls.every(row=>['portableUpdateStatus','portableUpdateRequest'].includes(row.method)&&(!row.operation||row.operation==='check')));
+check('an older public release is not displayed as a downgrade and upstream qualification is clear',!document.querySelector('[data-update-channel="oracle"]').textContent.includes('→ 0.1.30')&&document.querySelector('[data-update-channel="oracle"]').textContent.includes('aguarda versão compatível do ORACLE'));
+OraclePortableUpdates.reset();
+return {checks,passed:checks.filter(row=>row.pass).length,failed:checks.filter(row=>!row.pass).length,scope:'Synthetic native WKWebView restore, update query rejection and lost acknowledgement'};

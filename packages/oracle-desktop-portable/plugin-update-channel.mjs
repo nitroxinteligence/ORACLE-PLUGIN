@@ -10,6 +10,8 @@ import {admitPluginRelease,assertPluginRelease,newerPluginVersion,PLUGIN_REPOSIT
 import {skillsSHA} from './skills-release-admission.mjs';
 import {latestRelease,releaseBytes} from './release-network.mjs';
 import {discoverCodexHost} from './codex-host-provider.mjs';
+import {createPluginRuntimeUpdates} from './plugin-runtime-updates.mjs';
+import {checkOriginalComponents} from './component-update-check.mjs';
 const execute=promisify(execFile),fail=(code,message)=>{throw Object.assign(new Error(message),{code});};
 export async function verifyPluginReleaseDirectory(root,files){
  if(resolve(root)!==root||await fs.realpath(root)!==root)fail('plugin_path_collision','Pasta do plugin redirecionada.');const names=[];
@@ -17,10 +19,10 @@ export async function verifyPluginReleaseDirectory(root,files){
  await walk(root);if(names.sort().join('\0')!==Object.keys(files).sort().join('\0'))fail('plugin_inventory_changed','O pacote do host não coincide com o inventário assinado.');
  for(const path of names){const file=join(root,path),before=await fs.lstat(file),row=files[path];if(before.size!==row.bytes||process.platform!=='win32'&&(before.mode&0o777)!==row.mode)fail('plugin_inventory_changed','Tamanho ou permissão do pacote divergente.');const hash=createHash('sha256');for await(const block of createReadStream(file))hash.update(block);const after=await fs.lstat(file);if(before.ino!==after.ino||before.size!==after.size||before.mtimeMs!==after.mtimeMs||hash.digest('hex')!==row.sha256)fail('plugin_inventory_changed','Pacote do host mudou.');}return true;
 }
-/** Updates use only the host's supported plugin CLI. No host cache mutation,
- * account login, personal model execution or application restart is performed. */
-export function createPluginUpdateChannel({bundleRoot,hostPackageRoot,policy,profileStore,fetchImpl=globalThis.fetch,platform=`${process.platform}-${process.arch}`,discoverHost=discoverCodexHost,runCLI,home=homedir(),codexHome=process.env.CODEX_HOME||join(home,'.codex')}={}){
- const trust=loadReviewedContentTrust(join(bundleRoot,'resources'));let latest;
+/** Marketplace installs use the supported host CLI. Manual imports select a
+ * signed runtime in PLUGIN_DATA without mutating the account or host cache. */
+export function createPluginUpdateChannel({bundleRoot,hostPackageRoot,dataDir,policy,profileStore,fetchImpl=globalThis.fetch,platform=`${process.platform}-${process.arch}`,discoverHost=discoverCodexHost,runCLI,home=homedir(),codexHome=process.env.CODEX_HOME||join(home,'.codex')}={}){
+ const trust=loadReviewedContentTrust(join(bundleRoot,'resources'));let latest,latestEnvelope;
  const check=context=>{policy.assertAdmission(context.ticket);if(context.signal?.aborted)fail('operation_cancelled','Atualização cancelada.');};
  async function cli(args,context){check(context);if(runCLI)return runCLI(args,context);const host=discoverHost();if(!host.available)fail('plugin_host_unavailable','Use o gerenciador de plugins do ChatGPT/Codex para esta atualização.');const result=await execute(host.executablePath,['plugin',...args],{cwd:bundleRoot,env:{PATH:process.env.PATH||'/usr/bin:/bin',HOME:home,CODEX_HOME:codexHome,LANG:'en_US.UTF-8',GIT_CONFIG_NOSYSTEM:'1',GIT_CONFIG_GLOBAL:'/dev/null',GIT_TERMINAL_PROMPT:'0'},signal:context.signal,timeout:300000,maxBuffer:2000000,windowsHide:true,shell:false});check(context);const after=discoverHost();if(!after.available||after.binarySHA256!==host.binarySHA256)fail('plugin_host_changed','O executável do host mudou.');return JSON.parse(result.stdout);}
  async function marketplace(context){
@@ -33,7 +35,9 @@ export function createPluginUpdateChannel({bundleRoot,hostPackageRoot,policy,pro
  }
  async function registered(context){
   const manifest=JSON.parse(await fs.readFile(join(bundleRoot,'plugin.json'),'utf8')),identity=manifest.name+'@'+PLUGIN_MARKETPLACE;
-  if(!hostPackageRoot)return {manifest,identity,registered:false};
+  if(!hostPackageRoot||manifest.name==='oracle-system-mac-0-1-32')return {manifest,identity,registered:false};
+  const hostManifest=JSON.parse(await fs.readFile(join(hostPackageRoot,'plugin.json'),'utf8'));
+  if(hostManifest.name!==manifest.name)return {manifest,identity,registered:false};
   const listing=await cli(['list','--marketplace',PLUGIN_MARKETPLACE,'--json'],context),matches=listing.installed?.filter(row=>row.pluginId===identity&&row.installed&&row.enabled);
   if(matches?.length!==1)return {manifest,identity,registered:false};
   const entry=matches[0];
@@ -46,13 +50,18 @@ export function createPluginUpdateChannel({bundleRoot,hostPackageRoot,policy,pro
   async check(context){await policy.revalidateAdmission(context.ticket);check(context);const manifest=JSON.parse(await fs.readFile(join(bundleRoot,'plugin.json'),'utf8')),prior=(await profileStore.load()).pluginFeed||{};
    const release=await latestRelease(PLUGIN_REPOSITORY,{fetchImpl,signal:context.signal,check:()=>check(context)}),assets=release.assets.filter(row=>row.name==='oracle-plugin-release.json');if(assets.length!==1||!Number.isSafeInteger(assets[0].size)||assets[0].size<1||assets[0].size>2000000||!/^sha256:[a-f0-9]{64}$/.test(assets[0].digest??'')||assets[0].browser_download_url!==`https://github.com/${PLUGIN_REPOSITORY}/releases/download/${release.tag_name}/oracle-plugin-release.json`)fail('invalid_plugin_release','Manifesto da distribuição oficial ausente.');
    const bytes=await releaseBytes(assets[0].browser_download_url,{fetchImpl,signal:context.signal,check:()=>check(context),maximum:2000000,expectedBytes:assets[0].size});if('sha256:'+skillsSHA(bytes)!==assets[0].digest)fail('plugin_inventory_changed','Manifesto diverge da release.');
-   const admitted=admitPluginRelease(bytes,{trust,minimumSequence:prior.sequence||0,knownManifestSHA256:prior.manifestSHA256});if(admitted.releaseID!==release.tag_name||!admitted.platforms[platform]||admitted.platforms[platform].name!==manifest.name)fail('plugin_release_incompatible','Release pertence a outra identidade ou plataforma.');
-   check(context);await profileStore.update(value=>{check(context);const previous=value.pluginFeed||{};if(previous.sequence>admitted.sequence||previous.sequence===admitted.sequence&&previous.manifestSHA256!==admitted.manifestSHA256)fail('plugin_rollback','A release mudou durante a consulta.');return {...value,pluginFeed:{sequence:admitted.sequence,manifestSHA256:admitted.manifestSHA256,version:admitted.version}};},{beforeCommit:()=>check(context)});latest=admitted;
-   return {currentVersion:manifest.version,latestVersion:admitted.version,available:newerPluginVersion(admitted.version,manifest.version),hostManaged:true,releaseURL:`https://github.com/${PLUGIN_REPOSITORY}/releases/tag/${admitted.releaseID}`,marketplaceURL:`https://github.com/${PLUGIN_REPOSITORY}`,signatureVerified:true};
+   const admitted=admitPluginRelease(bytes,{trust,minimumSequence:prior.sequence||0,knownManifestSHA256:prior.manifestSHA256});
+   // Manual imports retain their account identity across updates. Their
+   // executable distribution is the same signed platform package as stable.
+   const compatibleName=manifest.name===admitted.platforms[platform]?.name||platform==='darwin-arm64'&&manifest.name==='oracle-system-mac-0-1-32'&&admitted.platforms[platform]?.name==='oracle-system-mac-stable';
+   if(admitted.releaseID!==release.tag_name||!admitted.platforms[platform]||!compatibleName)fail('plugin_release_incompatible','Release pertence a outra identidade ou plataforma.');
+   check(context);await profileStore.update(value=>{check(context);const previous=value.pluginFeed||{};if(previous.sequence>admitted.sequence||previous.sequence===admitted.sequence&&previous.manifestSHA256!==admitted.manifestSHA256)fail('plugin_rollback','A release mudou durante a consulta.');return {...value,pluginFeed:{sequence:admitted.sequence,manifestSHA256:admitted.manifestSHA256,version:admitted.version}};},{beforeCommit:()=>check(context)});latest=admitted;latestEnvelope=bytes;
+   let components;try{components=await checkOriginalComponents({bundleRoot,fetchImpl,signal:context.signal,check:()=>check(context),qualified:admitted.engines});}catch(error){if(error.code!=='ENOENT')throw error;}
+   return {currentVersion:manifest.version,latestVersion:admitted.version,available:newerPluginVersion(admitted.version,manifest.version),hostManaged:true,releaseURL:`https://github.com/${PLUGIN_REPOSITORY}/releases/tag/${admitted.releaseID}`,marketplaceURL:`https://github.com/${PLUGIN_REPOSITORY}`,signatureVerified:true,...(components?{components}:{})};
   },
   async apply(context){if(!latest)fail('plugin_check_required','Consulte a atualização do ORACLE primeiro.');assertPluginRelease(latest);const candidate=latest;await policy.revalidateAdmission(context.ticket);check(context);const state=await registered(context);
-   if(!state.registered)return {installed:false,registrationRequired:true,url:`https://github.com/${PLUGIN_REPOSITORY}`,message:'Esta instalação foi importada por ZIP. Use o canal público de plugins para receber atualizações pelo host.'};
    if(!newerPluginVersion(candidate.version,state.manifest.version))return {installed:false,restartRequired:false,message:'ORACLE está na versão disponível.'};
+   if(!state.registered){if(!dataDir)fail('plugin_update_unavailable','Diretório persistente ausente.');return createPluginRuntimeUpdates({dataDir,trust,bundleVersion:state.manifest.version,platform,fetchImpl}).apply(candidate,latestEnvelope,{signal:context.signal,check:()=>check(context)});}
    // The CLI owns approval and cache writes. PLUGIN_DATA, vault, licenses and
    // hooks are not copied into, removed from, or restored to the host cache.
    await cli(['marketplace','upgrade',PLUGIN_MARKETPLACE,'--json'],context);check(context);

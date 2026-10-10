@@ -55,7 +55,7 @@ def admit(verifier,envelope,payload):
  return admitted
 
 BROTLIFY=r'''
-import{createReadStream,createWriteStream}from'node:fs';import{createGunzip,createBrotliCompress,constants}from'node:zlib';import{pipeline}from'node:stream/promises';const[input,output]=process.argv.slice(1);await pipeline(createReadStream(input),createGunzip(),createBrotliCompress({params:{[constants.BROTLI_PARAM_QUALITY]:6,[constants.BROTLI_PARAM_LGWIN]:24}}),createWriteStream(output,{flags:'wx'}));
+import{createReadStream,createWriteStream}from'node:fs';import{createGunzip,createBrotliCompress,constants}from'node:zlib';import{pipeline}from'node:stream/promises';const[input,output]=process.argv.slice(1);await pipeline(createReadStream(input),createGunzip(),createBrotliCompress({params:{[constants.BROTLI_PARAM_QUALITY]:9,[constants.BROTLI_PARAM_LGWIN]:24}}),createWriteStream(output,{flags:'wx'}));
 '''
 def package(args):
  base=canonical(args.base_package,True);bun=canonical(args.bun_runtime);ai=canonical(args.ai_memory_runtime);license=canonical(args.ai_memory_license);verifier=canonical(args.verifier_runtime);envelope=canonical(args.content_envelope);payload=canonical(args.content_payload,True)
@@ -122,7 +122,7 @@ def package(args):
    rows.append(row)
    if sha(source)!=before:raise ValueError('compression_source_drift')
  packed_payload=stage/'runtime-payload.br'
- subprocess.run([str(verifier),'--no-env-file','--no-install','-e',BROTLIFY,str(gz),str(packed_payload)],cwd=ROOT,env={'PATH':'/usr/bin:/bin','DO_NOT_TRACK':'1'},capture_output=True,text=True,timeout=180,check=True)
+ subprocess.run([str(verifier),'--no-env-file','--no-install','-e',BROTLIFY,str(gz),str(packed_payload)],cwd=ROOT,env={'PATH':'/usr/bin:/bin','DO_NOT_TRACK':'1'},capture_output=True,text=True,timeout=300,check=True)
  gz.unlink()
  manifest={'schemaVersion':2,'format':'oracle-concat-brotli-v2','payloadSHA256':sha(packed_payload),'runtimeSHA256':sha(bun),'packedRuntime':packed_runtime,'expandedBytes':sum(r['bytes'] for r in rows),'files':rows}
  if len(rows)>30000 or manifest['expandedBytes']>700000000:raise ValueError('runtime_payload_limit')

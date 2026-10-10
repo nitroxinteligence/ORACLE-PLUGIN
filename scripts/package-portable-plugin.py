@@ -344,7 +344,7 @@ def package(runtime, output, engine_inventory=None, ai_memory_runtime=None, ai_m
     member = Path('resources/licensing/public-keys.json')
     sources[member.as_posix()] = copy_verified(ROOT / 'Resources/licensing/public-keys.json', stage / member)
     # Public distributor trust is separate from licensing and download secrets.
-    for name in ('sources.json', 'distribution-keys.json'):
+    for name in ('sources.json', 'distribution-keys.json', 'portable-upstream.json'):
         member = Path('resources/updates') / name
         sources[member.as_posix()] = copy_verified(ROOT / 'Resources/updates' / name, stage / member)
     member = Path('resources/updates/portable-access.json')
@@ -423,7 +423,7 @@ def package(runtime, output, engine_inventory=None, ai_memory_runtime=None, ai_m
 def build_runtime_payload(stage, compression='brotli'):
     """Keep the qualification tree expanded; compress logical runtime for import."""
     external = {'plugin.json', '.codex-plugin/plugin.json', '.mcp.json', 'mcp.json', 'README.md', 'scripts/launch-mcp.sh', 'runtime/bun', 'runtime-payload.mjs', 'runtime-payload-platform.mjs', 'runtime-cache-lock.mjs', 'runtime-binary-source.mjs', 'assets/icon-mono.png'}
-    shared_bootstrap = {'stdio-transport.mjs', 'mcp-metadata.mjs'}
+    shared_bootstrap = {'stdio-transport.mjs', 'mcp-metadata.mjs', 'runtime-cache-lock.mjs'}
     external.update(shared_bootstrap | {'runtime-bootstrap.mjs'})
     if compression not in ('gzip', 'brotli'):
         raise ValueError('unsupported_payload_compression')

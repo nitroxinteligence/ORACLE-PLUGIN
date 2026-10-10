@@ -7,7 +7,21 @@ import {admitSkillsRelease,assertSkillsRelease,skillsSHA} from '../packages/orac
 import {createSkillsUpdateTransaction} from '../packages/oracle-desktop-portable/skills-update-transaction.mjs';
 import {createPortableUpdateService} from '../packages/oracle-desktop-portable/update-service.mjs';
 import {createCodexUserSkillsRegistration} from '../packages/oracle-desktop-portable/codex-user-skills-registration.mjs';
+import {createSkillsReleaseSource} from '../packages/oracle-desktop-portable/skills-release-source.mjs';
 const transaction=(f,extra={})=>createSkillsUpdateTransaction({...f,knowledge:{refresh:async()=>({complete:true})},...extra});
+test('a newer executable retains the independently signed installed corpus until its update completes',async t=>{
+ const f=await updateFixture(t);await fs.mkdir(join(f.dataDir,'skills-manifests'));await fs.writeFile(join(f.dataDir,'skills-manifests',f.previous.manifestSHA256+'.json'),f.old.envelope);
+ await f.profileStore.update(value=>({...value,skillsInstallation:{complete:true,sequence:1,manifestSHA256:f.previous.manifestSHA256,vault:f.vaultRoot}}));await fs.writeFile(join(f.bundleRoot,'engine-source/provenance/oracle-distribution.json'),f.latest.envelope);
+ const fresh=createSkillsReleaseSource({...f});assert.equal((await fresh.installed()).sequence,1);assert.equal((await fresh.check({ticket:f.ticket})).sequence,2);
+});
+test('feed checks run during restoration without indexing; applying still requires an idle installer',async t=>{
+ const f=await updateFixture(t);let idleChecks=0,indexed=0;
+ const updates=createPortableUpdateService({...f,assertInstallerIdle(){idleChecks++;throw Object.assign(new Error('Synthetic restore running'),{code:'onboarding_busy'});},skillsSource:f.source,skillsTransaction:transaction(f,{knowledge:{refresh:async()=>{indexed++;return {complete:true};}}}),pluginChannel:{check:async()=>({available:false})}});
+ updates.start({requestID:'check_restore_0001',operation:'check'},{ticket:f.ticket});
+ updates.assertIdle();const result=await updates.settled();
+ assert.equal(result.phase,'checked');assert.equal(result.skills.available,true);assert.equal(idleChecks,0);assert.equal(indexed,0);
+ assert.throws(()=>updates.start({requestID:'install_restore_0001',operation:'skills'},{ticket:f.ticket}),{code:'onboarding_busy'});assert.equal(idleChecks,1);assert.equal(indexed,0);await updates.close();
+});
 test('signed complete skills inventory is independent of engine pins; retired packages never download',async t=>{
  const f=await updateFixture(t,{newFiles:{'SISTEMA/skills/sample/SKILL.md':'# Updated\n','SISTEMA/prompts/retired.md':'Retired'}}),stage=await f.stage();assert.equal(stage.admitted.signatureVerified,true);assert.equal(stage.admitted.files.length,1);assert.ok(!f.fetched.some(url=>url.endsWith('prompts-0001.json')));assert.equal(stage.read('SISTEMA/skills/sample/SKILL.md').toString(),'# Updated\n');assert.throws(()=>stage.read('SISTEMA/prompts/retired.md'));
  assert.throws(()=>assertSkillsRelease({...stage.admitted}),{code:'unadmitted_skills_release'});

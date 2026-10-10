@@ -8,7 +8,7 @@ export const PORTABLE_CONTENT_CONTRACT = 'portable-content-v1';
 export const PORTABLE_CONTENT_DOMAIN = 'oracle-portable-content-v1\0';
 export const WINDOWS_CONTENT_CONTRACT = 'portable-content-windows-x64-v1';
 export const WINDOWS_CONTENT_DOMAIN = 'oracle-portable-content-windows-x64-v1\0';
-export const PORTABLE_CONTENT_PINS = Object.freeze({"runtimeSHA256":"35d20dd0263e5c950194434b925454fdfa9ba6e4467da960410fa05b08a7a5b5","runtimeBytes":61884464,"bunVersion":"1.4.2","gbrainVersion":"0.60.151.0","gbrainCommit":"3bdf17f3b7b97568e59c5a4956c8b7429012353b","methodManifestSHA256":"ee203866336b4454b5bc729f959ba50a5599b71649c884429681ee12015c0220"});
+export const PORTABLE_CONTENT_PINS = Object.freeze({"runtimeSHA256":"35d20dd0263e5c950194434b925454fdfa9ba6e4467da960410fa05b08a7a5b5","runtimeBytes":61884464,"bunVersion":"1.4.2","gbrainVersion":"0.60.94.0","gbrainCommit":"e7f59913e34667d883ea68bcd7236c0e4a6d5b8e","methodManifestSHA256":"8fffad15a0aac81ef109f05751e94b1fd04999d5d32616e6a7bd8db2f0249496"});
 export const WINDOWS_CONTENT_PINS = Object.freeze({...PORTABLE_CONTENT_PINS, runtimeSHA256:'15277c59ccd6c6c20f8dc9716c2b59c1776320d606b6a8658f70be8799519ca4', runtimeBytes:86096984});
 export function portableContentContractDetails(contract) {
   if(contract===PORTABLE_CONTENT_CONTRACT)return Object.freeze({contract,domain:PORTABLE_CONTENT_DOMAIN,platform:'darwin-arm64',runtimePath:'runtime/bun',pins:PORTABLE_CONTENT_PINS});

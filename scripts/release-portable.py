@@ -83,6 +83,7 @@ def release(a,job,secret,token):
     run([bun,ROOT/'scripts/qualify-portable-vault-recovery.mjs','--payload-root',current['payloadRoot'],'--output',vault_recovery])
     lifecycle=job/'lifecycle-report.json'
     run([bun,ROOT/'scripts/qualify-portable-reopen.mjs','--payload-root',current['payloadRoot'],'--installation-report',installation_report,'--output',lifecycle])
+    run([bun,ROOT/'scripts/qualify-portable-installed-upgrade.mjs','--previous-root',prior_runtime['payloadRoot'],'--current-root',current['payloadRoot'],'--output',job/'installed-upgrade'])
     migration=json.loads(run([bun,ROOT/'scripts/qualify-portable-upstream.mjs','--previous-root',prior_runtime['payloadRoot'],'--previous-bun',prior_runtime['runtime'],'--current-root',current['payloadRoot'],'--current-bun',current['runtime'],'--output',job/'migration']))
     stage=job/'marketplace';run(['python3',ROOT/'scripts/prepare-plugin-release.py','--mac',mac_zip,'--windows',win_zip,'--version',next_version,'--output',stage])
     release=job/'oracle-plugin-release.json';revision=run(['git','rev-parse','HEAD']).strip()

@@ -8,7 +8,7 @@ import {createHostCapabilities,validatedExternalURL} from './host-capabilities.m
 import {createProfileStore,assertPrivatePath} from './profile-store.mjs';
 import {createVaultService} from './vault-service.mjs';
 import {createPersistentVaultSelection} from './persistent-vault-selection.mjs';
-import {createVaultRestoration} from './vault-restoration.mjs';
+import {createVaultRestoration,describeVaultRestorationError} from './vault-restoration.mjs';
 import {createProfileKernelLock} from './profile-kernel-lock.mjs';
 import {GBRAIN_NATIVE_PINS} from './gbrain-native-pins.mjs';
 import {createPlatformHostProviders} from './platform-host-providers.mjs';
@@ -212,7 +212,7 @@ export async function createService({root,hostPackageRoot,dataDir=process.env.OR
     let discoveryVerified=false;try{if(account?.connected&&account?.explicitAuthorization&&skillsDiscoveryReceipt){skillsRouting.assertCurrent(skillsDiscoveryReceipt);discoveryVerified=true;}}catch{skillsDiscoveryReceipt=null;}
     // Consent snapshot is live and cannot restore authorization from a journal.
     const consent=memoryConsent.snapshot();let maintenanceRequested=false;try{maintenanceRequested=memoryConsent.captureChoices().enabled===true;}catch{}
-    return onboardingStatus({policy,vault,preferences:(await profileStore.load()).preferences||{},knowledge:knowledge.syncSnapshot(),coordinator:coordinator?.snapshot(),operation:installationOperation.snapshot(),runID:installationRunID,
+    return onboardingStatus({policy,vault,vaultRecovery:vaultRestoration.snapshot(),preferences:(await profileStore.load()).preferences||{},knowledge:knowledge.syncSnapshot(),coordinator:coordinator?.snapshot(),operation:installationOperation.snapshot(),runID:installationRunID,
       integration:{officialHooks:officialHooksReceipt,connected:account?.connected===true&&account?.explicitAuthorization===true,discoveryVerified,captureRequested:consent.captureRequested,maintenanceRequested}});
   };
   const startInstallation=(action,context)=>{
@@ -246,10 +246,8 @@ export async function createService({root,hostPackageRoot,dataDir=process.env.OR
   };
   const vaultRestoration=createVaultRestoration({profileStore,revision:()=>policy.snapshot().generation,
     canRestore:()=>policy.snapshot().active&&!vault.status().selected&&!pickerBusy&&!vaultMutationBusy&&!installationAdmission&&!installationOperation.snapshot()?.running&&!coordinator?.snapshot().running&&!updates?.snapshot().running,
-    restore:async()=>{
-      try{const selected=await vault.restoreVault();if(selected)await restoreExisting({ticket:policy.requireCapability('configure')});return !!selected;}
-      catch(error){vault.revoke();if(!['invalid_directory_bookmark','invalid_directory_path','directory_grant_stale','directory_grant_changed','directory_grant_unavailable','host_capability_unsupported','ENOENT','VAULT_ROOT_CHANGED','access_denied'].includes(error.code))throw error;return false;}
-    }
+    describeError:describeVaultRestorationError,
+    restore:async()=>{const selected=await vault.restoreVault();if(selected)await restoreExisting({ticket:policy.requireCapability('configure')});return !!selected;}
   });
   const preferences=async(mutator,ticket)=>profileStore.update(value=>{policy.assertAdmission(ticket);value.preferences??={};mutator(value.preferences);return value;},{beforeCommit:()=>policy.assertAdmission(ticket)});
   const resolveGrant=async(hash,{signal,beforeAccept}={})=>{
@@ -303,7 +301,14 @@ saveVersion:async(p,c)=>{if(Object.keys(p).some(key=>!['path','hash','text'].inc
     prepareGBrain:async(p,context)=>{noArgs(p);cancelMemory();const result=await knowledge.refresh({signal:context.signal});if(connection)await prepareRelayBinding(context);return result;},
     gbrainRead:(p,context)=>knowledge.read(p,{signal:context.signal}),
     onboardingCancel:async p=>{noArgs(p);disconnectMemory();cancelExports();coordinator?.cancel();knowledge.cancel();return true;},
-    onboardingResume:async(p,context)=>{noArgs(p);if(installationAdmission)fail('onboarding_busy','A instalação já está em andamento.');if(coordinator){startInstallation(restorationRequested?'restore':'resume',context);return status();}fail('next_phase_unavailable','A instalação do acervo e do método ainda não está disponível. O índice local pode ser atualizado separadamente.');},
+    onboardingResume:async(p,context)=>{
+      noArgs(p);if(installationAdmission)fail('onboarding_busy','A instalação já está em andamento.');
+      // A lost live lease is a recovery action, never installation consent.
+      // Reacquire the stored OS grant and verify the existing signed files.
+      if(!vault.status().selected&&vaultRestoration.snapshot().savedSelection){await vaultRestoration.ensure({retry:true});return status();}
+      if(coordinator){startInstallation(restorationRequested?'restore':'resume',context);return status();}
+      fail('next_phase_unavailable','A instalação do acervo e do método ainda não está disponível. O índice local pode ser atualizado separadamente.');
+    },
     onboardingInstallMemoryOnly:async(p,c)=>{
       if(Object.keys(p).some(key=>!['replaceLegacy','localMemoryPortability','maintenance'].includes(key))||p.replaceLegacy!==undefined&&typeof p.replaceLegacy!=='boolean')fail('invalid_request','Opções de instalação inválidas.');
       const consent=p.localMemoryPortability,selection=vault.status();

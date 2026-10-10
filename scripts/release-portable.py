@@ -78,12 +78,14 @@ def release(a,job,secret,token):
     run(['node','--test',ROOT/'scripts/test-portable-codex-installation.mjs'],env={**os.environ,'ORACLE_CODEX_INSTALL_REAL_TEST':'1','ORACLE_CODEX_INSTALL_PAYLOAD_ROOT':current['payloadRoot']})
     onboarding=run([bun,ROOT/'scripts/qualify-portable-onboarding.mjs','--payload-root',current['payloadRoot'],'--output',job/'onboarding'])
     installation_report=json.loads(onboarding.strip().splitlines()[-1])['report']
+    vault_recovery=job/'vault-recovery-report.json'
+    run([bun,ROOT/'scripts/qualify-portable-vault-recovery.mjs','--payload-root',current['payloadRoot'],'--output',vault_recovery])
     lifecycle=job/'lifecycle-report.json'
     run([bun,ROOT/'scripts/qualify-portable-reopen.mjs','--payload-root',current['payloadRoot'],'--installation-report',installation_report,'--output',lifecycle])
     migration=json.loads(run([bun,ROOT/'scripts/qualify-portable-upstream.mjs','--previous-root',prior_runtime['payloadRoot'],'--previous-bun',prior_runtime['runtime'],'--current-root',current['payloadRoot'],'--current-bun',current['runtime'],'--output',job/'migration']))
     stage=job/'marketplace';run(['python3',ROOT/'scripts/prepare-plugin-release.py','--mac',mac_zip,'--windows',win_zip,'--version',next_version,'--output',stage])
     release=job/'oracle-plugin-release.json';revision=run(['git','rev-parse','HEAD']).strip()
-    signed(['node',ROOT/'scripts/sign-plugin-release.mjs','--stage',stage,'--version',next_version,'--sequence',str(sequence),'--revision',revision,'--packed-report',boot/'report.json','--migration-report',migration['report'],'--lifecycle-report',lifecycle,'--output',release])
+    signed(['node',ROOT/'scripts/sign-plugin-release.mjs','--stage',stage,'--version',next_version,'--sequence',str(sequence),'--revision',revision,'--packed-report',boot/'report.json','--migration-report',migration['report'],'--vault-recovery-report',vault_recovery,'--lifecycle-report',lifecycle,'--output',release])
     sums=job/'SHA256SUMS';sums.write_text(''.join(hashlib.sha256(p.read_bytes()).hexdigest()+'  '+p.name+'\n' for p in [mac_zip,win_zip,release]))
     if a.mode=='validate':print(json.dumps({'qualified':True,'published':False,'version':next_version}));return
     if not token:raise ValueError('Scoped repository publishing token required')

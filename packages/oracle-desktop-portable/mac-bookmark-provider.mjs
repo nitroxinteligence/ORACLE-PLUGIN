@@ -45,25 +45,31 @@ export function createCoreFoundationBookmarkBindings(ffi) {
   try { s = ffi.dlopen('/System/Library/Frameworks/CoreFoundation.framework/CoreFoundation', specs).symbols; }
   catch { fail('host_capability_unsupported', 'CoreFoundation FFI indisponível.'); }
   const release = pointer => { if (pointer) s.CFRelease(pointer); };
+  const bookmarkForURL = url => {
+    let data;
+    try {
+      data = s.CFURLCreateBookmarkData(null, url, 2048n, null, null, null);
+      if (!data) fail('directory_grant_unavailable', 'O macOS não forneceu bookmark com security scope.');
+      const length = Number(s.CFDataGetLength(data));
+      if (!Number.isSafeInteger(length) || length < 1 || length > MAX_BOOKMARK) fail('invalid_directory_bookmark', 'Bookmark fora dos limites.');
+      const pointer = s.CFDataGetBytePtr(data);
+      if (!pointer) fail('invalid_directory_bookmark', 'Bookmark vazio.');
+      return Buffer.from(new Uint8Array(ffi.toArrayBuffer(pointer, 0, length)));
+    } finally { release(data); }
+  };
   // NULL error output is intentional: errors are mapped without dereferencing CFError pointers.
   return Object.freeze({
     createBookmark(path) {
       pathSyntax(path);
       const utf8 = Buffer.from(path + '\0');
-      let string, url, data;
+      let string, url;
       try {
         string = s.CFStringCreateWithCString(null, ffi.ptr(utf8), UTF8);
         if (!string) fail('directory_grant_unavailable', 'Não foi possível representar a pasta.');
         url = s.CFURLCreateWithFileSystemPath(null, string, 0n, 1);
         if (!url) fail('directory_grant_unavailable', 'Não foi possível representar a pasta.');
-        data = s.CFURLCreateBookmarkData(null, url, 2048n, null, null, null);
-        if (!data) fail('directory_grant_unavailable', 'O macOS não forneceu bookmark com security scope.');
-        const length = Number(s.CFDataGetLength(data));
-        if (!Number.isSafeInteger(length) || length < 1 || length > MAX_BOOKMARK) fail('invalid_directory_bookmark', 'Bookmark fora dos limites.');
-        const pointer = s.CFDataGetBytePtr(data);
-        if (!pointer) fail('invalid_directory_bookmark', 'Bookmark vazio.');
-        return Buffer.from(new Uint8Array(ffi.toArrayBuffer(pointer, 0, length)));
-      } finally { release(data); release(url); release(string); }
+        return bookmarkForURL(url);
+      } finally { release(url); release(string); }
     },
     resolveBookmark(input) {
       const bytes = boundedBytes(input), stale = new Uint8Array(1);
@@ -97,6 +103,7 @@ export function createCoreFoundationBookmarkBindings(ffi) {
           } finally { release(string); }
         },
         startAccessing() { active(); if (started) fail('directory_grant_active', 'Permissão já ativa.'); started = !!s.CFURLStartAccessingSecurityScopedResource(url); return started; },
+        refreshBookmark() { active(); if (!started) fail('directory_grant_unavailable', 'A renovação exige a permissão ativa do macOS.'); return bookmarkForURL(url); },
         stopAccessing() { active(); if (started) { started = false; s.CFURLStopAccessingSecurityScopedResource(url); } },
         dispose() { if (!disposed) { try { if (started) { started = false; s.CFURLStopAccessingSecurityScopedResource(url); } } finally { disposed = true; release(url); } } },
       });
@@ -129,18 +136,24 @@ export function createMacBookmarkProvider({ platform = process.platform, binding
     if (bytes.toString('base64') !== record.bookmarkBase64) fail('invalid_directory_bookmark', 'Bookmark não canônico.');
     return boundedBytes(bytes);
   };
-  const acquireDirectoryGrant = async record => {
+  const acquireDirectoryGrant = async (record, { allowRelocation = false } = {}) => {
+    if (typeof allowRelocation !== 'boolean') fail('invalid_directory_bookmark', 'Opção de recuperação inválida.');
     const bytes = decode(record), expectedPath = record.path, resolved = (await getBindings()).resolveBookmark(bytes);
     let started = false, live = false;
     try {
-      if (resolved.stale !== false) fail('directory_grant_stale', 'Selecione novamente a pasta para renovar a permissão.');
+      if (typeof resolved.stale !== 'boolean') fail('invalid_directory_bookmark', 'Estado do bookmark inválido.');
       const path = pathSyntax(resolved.path());
-      if (path !== expectedPath) fail('directory_grant_changed', 'O bookmark pertence a outra pasta.');
+      if (path !== expectedPath && !allowRelocation) fail('directory_grant_changed', 'O bookmark pertence a outra pasta.');
       if (resolved.startAccessing() !== true) fail('directory_grant_unavailable', 'O macOS não confirmou acesso à pasta.');
       started = true;
       if (canonicalize(path) !== path) fail('invalid_directory_path', 'Pasta não canônica.');
+      let bookmark;
+      if (resolved.stale || path !== expectedPath) {
+        if (typeof resolved.refreshBookmark !== 'function') fail('directory_grant_stale', 'O macOS não forneceu a renovação da permissão.');
+        bookmark = Object.freeze({ version: 1, path, bookmarkBase64: boundedBytes(resolved.refreshBookmark()).toString('base64') });
+      }
       live = true;
-      return Object.freeze({ path, mechanism: 'corefoundation-security-scoped-bookmark', assertActive() { if (!live) fail('directory_grant_closed', 'Permissão da pasta encerrada.'); }, release(){if(!live)return;live=false;try{if(started)resolved.stopAccessing();}finally{resolved.dispose();}} });
+      return Object.freeze({ path, ...(bookmark ? { bookmark } : {}), mechanism: 'corefoundation-security-scoped-bookmark', assertActive() { if (!live) fail('directory_grant_closed', 'Permissão da pasta encerrada.'); }, release(){if(!live)return;live=false;try{if(started)resolved.stopAccessing();}finally{resolved.dispose();}} });
     } catch(error) {try{if(started)resolved.stopAccessing();}finally{resolved.dispose();}throw error;}
   };
   const withDirectoryGrant = async (record, work) => {

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Package experimental Oracle JS source and original UI with intact vendor Bun."""
+"""Package Oracle System source and original UI with intact vendor Bun."""
 import argparse
 import ctypes
 import gzip
@@ -379,7 +379,7 @@ def package(runtime, output, engine_inventory=None, ai_memory_runtime=None, ai_m
     (stage / '.codex-plugin/plugin.json').write_text(json.dumps(legacy, ensure_ascii=False, indent=2) + '\n')
     copy_verified(stage / 'mcp.json', stage / '.mcp.json')
     files = {file.relative_to(stage).as_posix(): sha(file) for file in source_files(stage)}
-    receipt = {'schemaVersion': 1, 'experimental': True, 'productParity': False,
+    receipt = {'schemaVersion': 1, 'product': 'Oracle System', 'productParity': False,
                'runtimeVersion': version, 'runtimeSHA256': runtime_hash,
                'runtimeVendorTeamIdentifier': '7FRXF46ZSN', 'runtimeSignatureVerified': True,
                'runtimeNotarizedRequirementVerified': True, 'runtimeVersionExecuted': True,
@@ -413,7 +413,7 @@ def package(runtime, output, engine_inventory=None, ai_memory_runtime=None, ai_m
         raise ValueError('ZIP must be strictly below 100 MiB.')
     value = {'archive': str(archive), 'bytes': size, 'limitBytes': LIMIT, 'underLimit': True,
              'sha256': sha(archive), 'runtimeVersion': version, 'runtimeSHA256': runtime_hash,
-             'memberCount': len(archive_members), 'runtimePayloadFileCount': len(payload_manifest['files']), 'runtimePayloadSHA256': payload_manifest['payloadSHA256'], 'engineSourceIncluded': bool(engine_receipt), 'experimental': True, 'hostImportVerified': False,
+             'memberCount': len(archive_members), 'runtimePayloadFileCount': len(payload_manifest['files']), 'runtimePayloadSHA256': payload_manifest['payloadSHA256'], 'engineSourceIncluded': bool(engine_receipt), 'product': 'Oracle System', 'hostImportVerified': False,
              'aiMemoryIncluded': ai_memory_runtime is not None, 'aiMemoryServiceVerified': False,
              'contentEnvelopeIncluded': bool(content_receipt), 'contentManifestSHA256': content_receipt['manifestSHA256'] if content_receipt else None,
              'personalProfileTouched': False, 'published': False}

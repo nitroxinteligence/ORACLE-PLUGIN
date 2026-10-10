@@ -19,6 +19,10 @@ def qualify(archive, output, plugin_name='oracle-system-mac-stable'):
     manifests = [json.loads((bundle / name).read_text()) for name in ['plugin.json', '.codex-plugin/plugin.json']]
     version = manifests[0]['version']
     if any(row['name'] != plugin_name or row['version'] != version for row in manifests): raise ValueError('Mac identity/version mismatch')
+    configurations = [json.loads((bundle / name).read_text()) for name in ['mcp.json', '.mcp.json']]
+    if any(len(row.get('mcpServers', {})) != 1 for row in configurations): raise ValueError('Single reviewed MCP namespace required')
+    if tuple(map(int, version.split('.'))) >= (0, 1, 32) and any(list(row['mcpServers']) != [plugin_name] for row in configurations): raise ValueError('MCP namespace must match plugin identity')
+    if configurations[0]['mcpServers'] != configurations[1]['mcpServers']: raise ValueError('Portable and legacy MCP configuration mismatch')
     if plugin_name != 'oracle-system-mac-stable' and (not re.fullmatch(r'[0-9]+\.[0-9]+\.[0-9]+', version) or plugin_name != 'oracle-system-mac-' + version.replace('.', '-')): raise ValueError('Versioned manual Mac identity required')
     home = output / 'home'; home.mkdir(); profile = output / 'profile'
     env = {'HOME': str(home), 'PATH': '/usr/bin:/bin:/usr/sbin:/sbin', 'LANG': 'en_US.UTF-8', 'ORACLE_PORTABLE_PLUGIN_DATA': str(profile)}
@@ -47,7 +51,15 @@ def qualify(archive, output, plugin_name='oracle-system-mac-stable'):
     if (home / '.codex/hooks.json').exists(): raise ValueError('Unexpected hook installation at boot')
     caches = list((profile / 'runtime-cache').iterdir())
     if len(caches) != 1 or not (caches[0] / 'server.mjs').is_file(): raise ValueError('Admitted expanded tree absent')
-    receipt = {'passed': True, 'version': initial['serverInfo']['version'], 'pluginName': plugin_name, 'archiveSHA256': hashlib.sha256(archive.read_bytes()).hexdigest(), 'payloadRoot': str(caches[0]), 'runtime': str(bundle / 'runtime/bun'), 'personalProfileUsed': False, 'hooksInstalled': False}
+    external_hashes_verified = tuple(map(int, version.split('.'))) >= (0, 1, 32)
+    if external_hashes_verified:
+        inventory = json.loads((caches[0] / 'portable-package-receipt.json').read_text())['files']
+        for name, digest in inventory.items():
+            member = pathlib.PurePosixPath(name)
+            if member.is_absolute() or '..' in member.parts: raise ValueError('Irregular receipt member')
+            target = bundle / member if (bundle / member).is_file() else caches[0] / member
+            if target.is_symlink() or not target.is_file() or hashlib.sha256(target.read_bytes()).hexdigest() != digest: raise ValueError('Package receipt hash mismatch: ' + name)
+    receipt = {'passed': True, 'version': initial['serverInfo']['version'], 'pluginName': plugin_name, 'mcpNamespace': next(iter(configurations[0]['mcpServers'])), 'archiveSHA256': hashlib.sha256(archive.read_bytes()).hexdigest(), 'payloadRoot': str(caches[0]), 'runtime': str(bundle / 'runtime/bun'), 'externalReceiptHashesVerified': external_hashes_verified, 'personalProfileUsed': False, 'hooksInstalled': False}
     (output / 'report.json').write_text(json.dumps(receipt, indent=2) + '\n'); return receipt
 
 if __name__ == '__main__':

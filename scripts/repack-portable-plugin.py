@@ -29,7 +29,7 @@ ALLOWED_REPLACEMENTS = frozenset({
     'vault-service.mjs', 'knowledge-service.mjs', 'gbrain-source-runner.mjs',
     'gbrain-mcp-session.mjs', 'official-memory-relay.mjs',
     'resources/web/app.js', 'resources/web/flat-universe.js', 'ui-resource.mjs',
-    'runtime-bootstrap.mjs', 'stdio-transport.mjs', 'mcp-metadata.mjs',
+    'runtime-bootstrap.mjs', 'stdio-transport.mjs', 'mcp-metadata.mjs', 'scripts/launch-mcp.sh',
     'runtime-binary-source.mjs', 'content-installation-plan.mjs', 'content-source-composition.mjs',
     'resources/web/index.html', 'resources/web/atlas.js', 'resources/web/universe.js',
     'resources/web/installation-visual.js', 'resources/web/preview.js', 'resources/web/transitions.js',
@@ -225,6 +225,21 @@ def repack(base, output, version, replacements, node, compression='keep', plugin
                 for field in ('logo', 'logoDark', 'composerIcon', 'composerIconDark'):
                     interface[field] = './assets/icon-mono.png'
             external_changes[root + name] = json_bytes(metadata)
+        # Different imported plugins must not share the same MCP namespace.
+        # Preserve the reviewed launcher/env while binding both portable and
+        # compatibility configurations to the exact plugin identity.
+        package_name = json.loads(external_changes[root + 'plugin.json'])['name']
+        for name in ('mcp.json', '.mcp.json'):
+            if root + name not in z.namelist():
+                raise ValueError('mcp_configuration_missing: ' + name)
+            mcp = json.loads(z.read(root + name))
+            servers = mcp.get('mcpServers')
+            if not isinstance(servers, dict) or len(servers) != 1:
+                raise ValueError('single_reviewed_mcp_server_required')
+            mcp['mcpServers'] = {package_name: next(iter(servers.values()))}
+            external_changes[root + name] = json_bytes(mcp)
+            if name in descriptors:
+                changes[name] = external_changes[root + name]
         is_windows = root + 'runtime/bun.exe' in z.namelist() or 'packedRuntime' in old
         packed_runtime, runtime_archive, removed_external = None, None, {root + name for name in removals if root + name in z.namelist()}
         if is_windows:
@@ -273,8 +288,10 @@ def repack(base, output, version, replacements, node, compression='keep', plugin
         receipt_path = captures.get('portable-package-receipt.json')
         if receipt_path:
             receipt = json.loads(receipt_path.read_bytes())
+            receipt.pop('experimental', None)
+            receipt['product'] = 'Oracle System'
             receipt_changes = dict(changes)
-            receipt_changes.update({name[len(root):]: data for name, data in external_changes.items() if name[len(root):] in replacements})
+            receipt_changes.update({name[len(root):]: data for name, data in external_changes.items() if name[len(root):] in replacements or name[len(root):] in receipt.get('files', {})})
             for name, data in receipt_changes.items():
                 checksum = hashlib.sha256(data).hexdigest()
                 for field in ('files', 'originalUIHashes'):

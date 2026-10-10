@@ -7,6 +7,8 @@
   let progressRun='',progressValue=0,openedRun='',integrationMessage='',repairing=false;
   let integration={enabled:true,autoCapture:false,remoteProcessing:false,hour:15,timezone:Intl.DateTimeFormat().resolvedOptions().timeZone};
   const needsRecovery=value=>value.licensed&&!['starting','running','cancelling','completed'].includes(value.status)&&(value.libraryRootChoices?.length||value.distributionConflicts?.length);
+  const needsVaultRecovery=value=>value.licensed&&value.vaultRecovery?.state==='failed'&&value.vaultRecovery.savedSelection===true;
+  const stageFor=value=>!value.licensed?'license':needsVaultRecovery(value)?'progress':value.resumeExisting?'completed':value.runID?(value.status==='completed'?'completed':'progress'):value.hasVault&&value.ui?.step==='install'?'install':'vault';
   const motionHandles=new Set();
   const esc=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
   const logo=()=>'<span class="ob2-logo metallic-lockup" role="img" aria-label="Oracle"><img class="metallic-symbol" src="brand/oracle-planet-chrome-v1.png" alt=""><img class="metallic-wordmark" src="brand/lockup-white.svg" alt=""></span>';
@@ -135,7 +137,8 @@
     const repair=current.status==='completed'&&current.bridgeNeedsReprepare===true;
     const integrating=(current.status==='completed'||current.installationCompleted===true)&&(current.integrationPending===true||repair);
     const portableIntegration=integrating&&Array.isArray(current.integrationActions);
-    const installing=repair||!!current.runID&&(current.status!=='completed'||integrating)&&!current.resumeExisting;
+    const recovering=needsVaultRecovery(current);
+    const installing=recovering||repair||!!current.runID&&(current.status!=='completed'||integrating)&&!current.resumeExisting;
     const visible=installing&&!screen.open&&!(portableIntegration&&!repair&&(!current.integrationActions.length||dismissedIntegrations.has(integrationKey())));
     if(!visible){progress.hidden=true;clean(progress);return;}
     const wasHidden=progress.hidden;progress.hidden=false;progress.classList.toggle('ob2-integrating',integrating);
@@ -155,19 +158,25 @@
     const actions=progress.querySelector('.ob2-codex-actions');actions.hidden=!integrating;
     const actionMode=repair?'repair':portableIntegration?'portable':'codex';
     if(actions.dataset.mode!==actionMode){for(const host of actions.children)host.replaceChildren();actions.dataset.mode=actionMode;if(!repairing)integrationMessage='';}
-    progress.querySelector('strong').textContent=repair?'Atualize a integração local':portableIntegration?'Integração opcional com o Codex':integrating?'Conclua a integração no Codex':phase[2]+(counted&&unit==='arquivos'?` · ${done}/${total}`:'…');
+    progress.querySelector('strong').textContent=recovering?'Recuperar acesso ao vault':repair?'Atualize a integração local':portableIntegration?'Integração opcional com o Codex':integrating?'Conclua a integração no Codex':phase[2]+(counted&&unit==='arquivos'?` · ${done}/${total}`:'…');
     const failed=['failed','interrupted','paused','cancelled'].includes(current.status);
     const error=progress.querySelector('.ob2-install-error');error.hidden=!failed&&!integrating;
     error.textContent=repair?(integrationMessage||current.bridgeRepairMessage||'O Oracle foi atualizado. Atualize a ligação local com o Codex para continuar.'):integrating?integrationMessage||current.integrationMessage||'Instalação local concluída. Abra o Codex com o roteiro pronto. Revise os hooks e envie a mensagem para registrar a manutenção. Depois clique em Verificar.':failed?(current.message||'Não foi possível concluir a instalação.'):'';
     if(repair&&current.localMemoryPortabilityUpdateNeeded===true)error.textContent+=` Ao atualizar, você autoriza salvar também as memórias deste segundo cérebro no vault ${current.vaultName||'selecionado'} (${current.vaultPath||''}). Captura de conversas, processamento remoto e backup mantêm suas escolhas atuais.`;
     error.classList.toggle('ob2-pending',integrating);
     const retry=progress.querySelector('.ob2-retry');retry.hidden=!failed||integrating;
-    const retryMode=current.installationError?.code==='content_existing_conflict'?'vault':'resume';
+    const retryMode=recovering?'restore':current.installationError?.code==='content_existing_conflict'?'vault':'resume';
     if(retry.dataset.mode!==retryMode){clean(retry);retry.replaceChildren();retry.dataset.mode=retryMode;}
-    if(failed&&!integrating&&!retry.querySelector('button'))metal(retry,retryMode==='vault'?'Escolher outro vault':'Tentar novamente',async()=>{
+    if(failed&&!integrating&&!retry.querySelector('button')){
+     metal(retry,retryMode==='restore'?'Recuperar acesso':retryMode==='vault'?'Escolher outro vault':'Tentar novamente',async()=>{
       if(retryMode==='vault'){const selected=await invoke('onboardingChooseVault');current=await invoke('onboardingStatus');if(selected){show('install');await api.refresh?.();}else updateProgress();}
       else{await invoke('onboardingResume');await poll();}
-    });
+     });
+     if(recovering){
+      const button=document.createElement('button');button.type='button';button.className='ob2-small-button';button.textContent='Selecionar novamente';
+      button.onclick=()=>run(async()=>{await invoke('onboardingChooseVault');const value=await invoke('onboardingStatus');receiveStatus(value);await api.refresh?.();});retry.append(button);
+     }
+    }
     if(repair&&!actions.querySelector('button')){
       plain(actions.querySelector('[data-open-codex]'),'Atualizar integração local',async()=>{
         const epoch=generation;repairing=true;openedRun=current.runID;integrationMessage='';updateProgress();
@@ -210,14 +219,14 @@
     positionProgress();
   }
 
-  const progressSignature=value=>JSON.stringify([value.runID,value.status,value.phase,value.message,value.installationError,value.installationCompleted,value.resumeExisting,value.installationProgress,value.confirmed,value.integrationPending,value.integrationActions,value.bridgeNeedsReprepare]);
+  const progressSignature=value=>JSON.stringify([value.runID,value.status,value.phase,value.message,value.installationError,value.vaultRecovery,value.installationCompleted,value.resumeExisting,value.installationProgress,value.confirmed,value.integrationPending,value.integrationActions,value.bridgeNeedsReprepare]);
   function receiveStatus(value){
     const previousHasVault=current.hasVault,previousDestination=destination(current),before=progressSignature(current);current=value;statusRevision++;
-    if(stage==='install'&&previousDestination!==destination(current)){if(destination(current))updateDestination();else show('vault');}
+    if(stage==='install'&&previousDestination!==destination(current)){if(destination(current))updateDestination();else show(needsVaultRecovery(current)?'progress':'vault');}
     else if(stage==='vault'&&(previousHasVault!==current.hasVault||previousDestination!==destination(current)))updateVaultSelection();
     if(needsRecovery(current)&&api.openRecovery)return {recovery:true,changed:false};
     if(!busy){
-      const next=!current.licensed?'license':current.resumeExisting?'completed':current.runID?(current.status==='completed'?'completed':'progress'):current.hasVault&&current.ui?.step==='install'?'install':'vault';
+      const next=stageFor(current);
       if(next!==stage)show(next);
     }
     updateProgress();return {changed:before!==progressSignature(current)};
@@ -244,8 +253,8 @@
   }
   function suspend(){generation++;for(const animation of motionHandles)animation.cancel();motionHandles.clear();clearInterval(timer);busy=false;pending=false;repairing=false;integrationMessage='';if(root){clean(root);activation.close();screen.close();progress.hidden=true;const content=screen.querySelector('.ob2-content');content.inert=false;delete content.dataset.transitioning;}document.body.classList.remove('ob2-configuring');api=null;}
   window.OracleOnboardingV2={
-    async mount(options){suspend();api=options;ensure();const revision=statusRevision,value=await invoke('onboardingStatus');if(revision===statusRevision)current=value;const next=!current.licensed?'license':current.resumeExisting?'completed':current.runID?(current.status==='completed'?'completed':'progress'):current.hasVault&&current.ui?.step==='install'?'install':'vault';show(next);timer=setInterval(()=>{if(!document.hidden&&!busy)void poll();},800);},
-    open(options={}){if(options.connection){if(current.installationCompleted===true&&Array.isArray(current.integrationActions)){dismissedIntegrations.delete(integrationKey());closeScreen();updateProgress();}return;}show(options.previewStage||(!current.licensed?'license':current.runID&&current.status!=='completed'?'progress':current.hasVault?'install':'vault'));},
+    async mount(options){suspend();api=options;ensure();const revision=statusRevision,value=await invoke('onboardingStatus');if(revision===statusRevision)current=value;show(stageFor(current));timer=setInterval(()=>{if(!document.hidden&&!busy)void poll();},800);},
+    open(options={}){if(options.connection){if(current.installationCompleted===true&&Array.isArray(current.integrationActions)){dismissedIntegrations.delete(integrationKey());closeScreen();updateProgress();}return;}show(options.previewStage||(!current.licensed?'license':needsVaultRecovery(current)||current.runID&&current.status!=='completed'?'progress':current.hasVault?'install':'vault'));},
     suspend,poll,syncStatus,getState:()=>({...current}),pendingDraft:()=>null,prepareToClose:async()=>{if(busy)throw Error('Aguarde esta etapa antes de fechar a configuração.');},
   };
   window.addEventListener('resize',positionProgress);

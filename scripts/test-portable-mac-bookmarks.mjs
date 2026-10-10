@@ -2,13 +2,13 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createMacBookmarkProvider, createCoreFoundationBookmarkBindings } from '../packages/oracle-desktop-portable/mac-bookmark-provider.mjs';
 
-function fixture({ stale = false, path = '/synthetic/vault', start = true, canonicalize = value => value } = {}) {
+function fixture({ stale = false, path = '/synthetic/vault', start = true, renewal = false, canonicalize = value => value } = {}) {
   const calls = [], bytes = Buffer.from('synthetic opaque OS bookmark');
   const bindings = {
     createBookmark(value) { calls.push(['create', value]); return bytes; },
     resolveBookmark(value) {
       assert.deepEqual(value, bytes); calls.push(['resolve']);
-      return { stale, path: () => path, startAccessing() { calls.push(['start']); return start; }, stopAccessing() { calls.push(['stop']); }, dispose() { calls.push(['dispose']); } };
+      return { stale, path: () => path, ...(renewal?{refreshBookmark(){calls.push(['renew']);return Buffer.from('renewed OS bookmark');}}:{}), startAccessing() { calls.push(['start']); return start; }, stopAccessing() { calls.push(['stop']); }, dispose() { calls.push(['dispose']); } };
     },
   };
   return { calls, provider: createMacBookmarkProvider({ platform: 'darwin', bindings, canonicalize }), record: { version: 1, path: '/synthetic/vault', bookmarkBase64: bytes.toString('base64') } };
@@ -68,7 +68,7 @@ test('stored bytes reopen an actual lease and all lifetimes close on success/exc
 
 test('stale/moved/denied/canonicality failures dispose without inventing a grant', async () => {
   for (const [options, code, names] of [
-    [{ stale: true }, 'directory_grant_stale', ['resolve', 'dispose']],
+    [{ stale: true }, 'directory_grant_stale', ['resolve', 'start', 'stop', 'dispose']],
     [{ path: '/different' }, 'directory_grant_changed', ['resolve', 'dispose']],
     [{ start: false }, 'directory_grant_unavailable', ['resolve', 'start', 'dispose']],
     [{ canonicalize: () => '/different' }, 'invalid_directory_path', ['resolve', 'start', 'stop', 'dispose']],
@@ -77,6 +77,18 @@ test('stale/moved/denied/canonicality failures dispose without inventing a grant
     await assert.rejects(provider.withDirectoryGrant(record, () => { worked = true; }), { code });
     assert.equal(worked, false); assert.deepEqual(calls.map(row => row[0]), names);
   }
+});
+
+test('a stale bookmark renews only after a real active OS grant; relocation is explicit composition',async()=>{
+ const {provider,record,calls}=fixture({stale:true,renewal:true});
+ const lease=await provider.acquireDirectoryGrant(record);lease.assertActive();
+ assert.equal(lease.bookmark.path,record.path);assert.equal(lease.bookmark.bookmarkBase64,Buffer.from('renewed OS bookmark').toString('base64'));
+ assert.deepEqual(calls.map(row=>row[0]),['resolve','start','renew']);lease.release();
+ assert.deepEqual(calls.slice(-2).map(row=>row[0]),['stop','dispose']);
+ const moved=fixture({stale:true,renewal:true,path:'/synthetic/moved'});
+ await assert.rejects(moved.provider.acquireDirectoryGrant(moved.record),{code:'directory_grant_changed'});
+ const relocated=await moved.provider.acquireDirectoryGrant(moved.record,{allowRelocation:true});assert.equal(relocated.path,'/synthetic/moved');assert.equal(relocated.bookmark.path,relocated.path);relocated.release();
+ const denied=fixture({stale:true,renewal:true,start:false});await assert.rejects(denied.provider.acquireDirectoryGrant(denied.record),{code:'directory_grant_unavailable'});assert(!denied.calls.some(row=>row[0]==='renew'));
 });
 
 test('paths/JSON alone, malformed bytes and absent platform/bindings fail closed', async () => {

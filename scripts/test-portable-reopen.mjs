@@ -6,7 +6,7 @@ import {spawn} from 'node:child_process';
 import {createProfileStore} from '../packages/oracle-desktop-portable/profile-store.mjs';
 import {createPersistentVaultSelection} from '../packages/oracle-desktop-portable/persistent-vault-selection.mjs';
 import {createVaultService} from '../packages/oracle-desktop-portable/vault-service.mjs';
-import {createVaultRestoration} from '../packages/oracle-desktop-portable/vault-restoration.mjs';
+import {createVaultRestoration,describeVaultRestorationError} from '../packages/oracle-desktop-portable/vault-restoration.mjs';
 
 const base=resolve('.work/portable-reopen-tests');await fs.mkdir(base,{recursive:true});
 async function scratch(){const root=await fs.mkdtemp(join(base,'synthetic-'));return {root,cleanup:()=>fs.rm(root,{recursive:true,force:true})};}
@@ -74,4 +74,63 @@ test('unexpected restoration failures are visible and do not cache a successful 
  let attempts=0;
  const restoration=createVaultRestoration({profileStore:{load:async()=>({vaultSelection:{bookmark:'existing'}})},canRestore:()=>true,restore:async()=>{attempts++;throw Error('Synthetic disk failure');}});
  await assert.rejects(restoration.ensure(),/Synthetic disk failure/);await assert.rejects(restoration.ensure(),/Synthetic disk failure/);assert.equal(attempts,2);
+});
+
+test('a transient OS failure remains recovery and explicit retry works with unchanged persisted data',async()=>{
+ const original={license:'preserved license',vaultSelection:{bookmark:'opaque OS bookmark'}};let denied=true,selected=false,calls=0;
+ const restoration=createVaultRestoration({profileStore:{load:async()=>structuredClone(original)},canRestore:()=>!selected,describeError:describeVaultRestorationError,restore:async()=>{calls++;if(denied)throw Object.assign(Error(),{code:'directory_grant_unavailable'});selected=true;return true;}});
+ assert.equal(await restoration.ensure(),false);assert.equal(restoration.snapshot().state,'failed');assert.equal(restoration.snapshot().savedSelection,true);
+ for(let i=0;i<5;i++)await restoration.ensure();assert.equal(calls,1);
+ denied=false;assert.equal(await restoration.ensure({retry:true}),true);assert.equal(calls,2);assert.equal(restoration.snapshot().state,'restored');
+ assert.deepEqual(original,{license:'preserved license',vaultSelection:{bookmark:'opaque OS bookmark'}});
+});
+
+test('OS bookmark renewal verifies the same directory identity and atomically preserves unrelated profile state',async()=>{
+ const work=await scratch();try{
+  const root=join(work.root,'vault'),moved=join(work.root,'moved');await fs.mkdir(root);
+  const store=createProfileStore({dataDir:join(work.root,'private')});let path=root,renew=false,releases=0;
+  const bookmarks={createBookmark:async()=>({version:1,path:root,bookmarkBase64:'b2xk'}),acquireDirectoryGrant:async(record,options)=>{
+   if(renew)assert.equal(options.allowRelocation,true);let live=true;
+   return {path,...(renew?{bookmark:{version:1,path,bookmarkBase64:'bmV3'}}:{}),assertActive(){assert(live);},release(){if(live){live=false;releases++;}}};
+  }};
+  const make=()=>createVaultService({profileStore:store,selectionAdapter:createPersistentVaultSelection({profileStore:store,bookmarks,chooseDirectory:async()=>({path:root})})});
+  const first=make();await first.selectVault();first.revoke();await store.update(value=>({...value,license:'preserved',preferences:{capture:false},contentInstallations:{original:{completed:true}}}));
+  const before=await store.load();await fs.rename(root,moved);path=moved;renew=true;
+  const reopened=make();await reopened.restoreVault();assert.equal(reopened.status().root,moved);
+  const after=await store.load();assert.equal(after.vaultSelection.bookmark.path,moved);assert.equal(after.vaultSelection.bookmark.bookmarkBase64,'bmV3');
+  assert.deepEqual(after.vaultSelection.rootIdentity,before.vaultSelection.rootIdentity);for(const key of ['license','preferences','contentInstallations'])assert.deepEqual(after[key],before[key]);
+  reopened.revoke();await fs.mkdir(root);path=root;const protectedProfile=await store.load();
+  await assert.rejects(make().restoreVault(),{code:'directory_grant_changed'});assert.deepEqual(await store.load(),protectedProfile);assert.equal(releases,3);
+ }finally{await work.cleanup();}
+});
+
+test('concurrent revocation while resolving a stale bookmark cannot resurrect the saved grant',async()=>{
+ const work=await scratch();try{
+  const root=join(work.root,'vault');await fs.mkdir(root);const info=await fs.stat(root),store=createProfileStore({dataDir:join(work.root,'private')});
+  const record={schemaVersion:1,rootIdentity:{dev:info.dev,ino:info.ino},bookmark:{version:1,path:root,bookmarkBase64:'b2xk'}};await store.save({license:'preserved',vaultSelection:record});
+  let entered,release,released=0;const ready=new Promise(resolve=>entered=resolve),waiting=new Promise(resolve=>release=resolve);
+  const adapter=createPersistentVaultSelection({profileStore:store,chooseDirectory:async()=>null,bookmarks:{async acquireDirectoryGrant(){entered();await waiting;return {path:root,bookmark:{version:1,path:root,bookmarkBase64:'bmV3'},assertActive(){},release(){released++;}};}}});
+  const vault=createVaultService({profileStore:store,selectionAdapter:adapter}),opening=vault.restoreVault();await ready;
+  await createProfileStore({dataDir:join(work.root,'private')}).update(value=>({...value,vaultSelection:null}));release();
+  await assert.rejects(opening,{code:'vault_selection_changed'});assert.equal(vault.status().selected,false);assert.equal(released,1);assert.deepEqual(await store.load(),{license:'preserved',vaultSelection:null});
+ }finally{await work.cleanup();}
+});
+
+test('selection cannot finish without a persistent OS bookmark provider',async()=>{
+ const work=await scratch();try{
+  const store=createProfileStore({dataDir:work.root});let picker=0;
+  const adapter=createPersistentVaultSelection({profileStore:store,chooseDirectory:async()=>{picker++;return {path:work.root};}});
+  await assert.rejects(adapter.selectVault(),{code:'directory_grant_unavailable'});assert.equal(picker,0);assert.deepEqual(await store.load(),{});
+ }finally{await work.cleanup();}
+});
+
+test('temporary OS errors retry with bounded backoff; identity errors require explicit recovery',async()=>{
+ let time=0,calls=0,denied=true;
+ const restoration=createVaultRestoration({profileStore:{load:async()=>({vaultSelection:{bookmark:'existing OS selection'}})},canRestore:()=>true,now:()=>time,describeError:describeVaultRestorationError,restore:async()=>{calls++;if(denied)throw Object.assign(Error(),{code:'directory_grant_unavailable'});return true;}});
+ await restoration.ensure();time=999;await restoration.ensure();assert.equal(calls,1);
+ time=1000;denied=false;assert.equal(await restoration.ensure(),true);assert.equal(calls,2);
+ restoration.reset();denied=true;for(let i=0;i<10;i++){time+=60000;await restoration.ensure();}assert.equal(calls,8,'one successful attempt plus at most six failed automatic attempts');
+ time+=60000;await restoration.ensure();assert.equal(calls,8);denied=false;assert.equal(await restoration.ensure({retry:true}),true);
+ let changed=0;const identity=createVaultRestoration({profileStore:{load:async()=>({vaultSelection:{bookmark:'existing OS selection'}})},canRestore:()=>true,now:()=>time,describeError:describeVaultRestorationError,restore:async()=>{changed++;throw Object.assign(Error(),{code:'directory_grant_changed'});}});
+ await identity.ensure();time+=60000;await identity.ensure();assert.equal(changed,1);assert.equal(identity.snapshot().error.retryable,false);
 });

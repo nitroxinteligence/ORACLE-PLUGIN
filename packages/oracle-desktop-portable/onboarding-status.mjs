@@ -2,8 +2,9 @@ import {assertOnboardingAIMemoryReceipt} from './onboarding-ai-memory.mjs';
 import {basename} from 'node:path';
 import {assertAIMemoryInstallationReceipt} from './ai-memory-installation-verifier.mjs';
 
-export function onboardingStatus({policy,vault,preferences={},knowledge,coordinator,operation,runID,integration={}}) {
+export function onboardingStatus({policy,vault,preferences={},knowledge,coordinator,operation,runID,integration={},vaultRecovery}) {
   const access=policy.snapshot(),selection=vault.status(),licensed=access.active;
+  const recoveryFailed=licensed&&!selection.selected&&vaultRecovery?.savedSelection===true&&vaultRecovery.state==='failed';
   const local=licensed&&selection.selected?coordinator:null;
   let aiMemory=null;try{if(local?.aiMemoryVerified===true)aiMemory=assertOnboardingAIMemoryReceipt(local.aiMemory);}catch{}
   let aiMemoryInstallation=null;try{if(local?.aiMemoryInstallationVerified===true)aiMemoryInstallation=assertAIMemoryInstallationReceipt(local.aiMemoryInstallation);}catch{}
@@ -35,7 +36,8 @@ export function onboardingStatus({policy,vault,preferences={},knowledge,coordina
   return {
     knowledgeInterviewAvailable:true,knowledgeWelcome:preferences.knowledgeWelcome||null,
     officialHooks:integration.officialHooks||{installed:false,hooksTrusted:false,captureVerified:false},
-    schemaVersion:2,status:visibleRun?state:local?.status||'not_started',...(visibleRun?{runID,profileMode:'memory-only',phase,message,...(installationError?{installationError}:diskFull?{installationError:{code:'ENOSPC',message:indexMessage}}:{}),...(indexCounted?{installationProgress:{phase,completed:index.verified,total:index.total}}:{})}:{}),licensed,legacyAccess:licensed&&access.role==='owner',
+    schemaVersion:2,status:recoveryFailed?'failed':visibleRun?state:local?.status||'not_started',...(visibleRun?{runID,profileMode:'memory-only',phase,message,...(installationError?{installationError}:diskFull?{installationError:{code:'ENOSPC',message:indexMessage}}:{}),...(indexCounted?{installationProgress:{phase,completed:index.verified,total:index.total}}:{})}:{}),
+    ...(recoveryFailed?{profileMode:'memory-only',phase:'preparing',message:vaultRecovery.error.message,installationError:vaultRecovery.error,vaultRecovery}:{}),licensed,legacyAccess:licensed&&access.role==='owner',
     role:licensed?access.role:'locked',capabilities:access.capabilities,
     legacyProfilePreserved:false,hasVault:licensed&&selection.selected,
     vaultName:licensed&&selection.selected?basename(selection.root):'',

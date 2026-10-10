@@ -1,4 +1,4 @@
-# Oracle System 0.1.30: retomada da instalação
+# Oracle System: retomada da instalação
 
 O processo portátil perdia a seleção do vault e os recibos em memória ao encerrar.
 O perfil ainda continha a instalação, mas a abertura seguinte voltava à escolha
@@ -110,3 +110,80 @@ A limpeza precede a entrega e nenhuma instalação pessoal é feita automaticame
 
 Verificação focada: `scripts/test-profile-content-receipts.mjs`,
 `scripts/test-portable-reopen.mjs` e `scripts/test-portable-vault.mjs`.
+
+## Recuperação do vault na 0.1.32
+
+A investigação de 10/10 reproduziu um bookmark real que o macOS marcou como
+desatualizado após mover o vault. A 0.1.31 recusava esse registro com
+`directory_grant_stale`. A camada de serviço ocultava a falha e retornava um
+estado sem vault selecionado, que a interface apresentava como primeira
+instalação. A configuração salva continuava existindo. Essa falha concreta
+não comprova qual condição disparou cada ocorrência pessoal anterior: o perfil
+foi removido na limpeza autorizada e o erro não era exposto pelo código antigo.
+
+A versão 0.1.32 resolve o bookmark original e ativa o acesso do macOS antes de
+renová-lo. Confere o device/inode originalmente autorizado, rejeita uma pasta
+substituta e persiste os bytes renovados numa transação que preserva licença,
+preferências, memória e recibos. Uma revogação ou seleção concorrente impede que
+a renovação ressuscite a autorização anterior. Caminhos e journals não
+substituem a permissão do sistema nem a verificação assinada da instalação.
+
+Uma falha de acesso passa a ser recuperação da instalação existente. A interface
+oferece recuperar o acesso e, se necessário, selecionar a pasta novamente.
+O botão de recuperação verifica os arquivos existentes; não inicia outra
+instalação nem solicita os consentimentos de memória novamente. Falhas
+temporárias têm tentativas limitadas, com intervalo crescente. Sem um provedor
+de bookmark persistente, a primeira seleção não pode concluir silenciosamente.
+
+O produto se chama Oracle System nos manifestos, ferramentas e mensagens do
+launcher. O namespace MCP corresponde à identidade exata do plugin, inclusive
+na configuração de compatibilidade. Isso evita que versões importadas usem um
+mesmo identificador de servidor. Um ensaio com dois plugins locais sintéticos no
+servidor real do Desktop confirmou que um namespace compartilhado expõe apenas
+um dos servidores. Com namespaces próprios, ambas as ferramentas atendem ao
+plugin correto. A colisão estrutural é reproduzível, mas esse ensaio não identifica
+qual plugin antigo respondeu a cada abertura pessoal anterior.
+O canal do marketplace mantém sua identidade
+estável; o ZIP manual 0.1.32 usa `oracle-system-mac-0-1-32`. A remoção do rótulo
+experimental não altera os estados de qualificação que ainda são falsos.
+
+As verificações têm escopos separados:
+
+- `scripts/qualify-portable-vault-recovery.mjs` reproduz a falha da versão
+  anterior com CoreFoundation real, renova a autorização, reabre em outro
+  processo e com o executável movido, preserva o arquivo original e rejeita
+  substituição de pasta. O relatório identifica o payload e seu recibo SHA-256.
+- A composição do ZIP verifica instalação local completa, índice GBrain,
+  AI Memory original e registro de 260 skills em um perfil sintético.
+- O servidor incluído no ChatGPT Desktop mantém o mesmo `PLUGIN_DATA` em duas
+  conversas e após reinício. Esse ensaio chama o launcher e o RPC reais do ZIP,
+  com rede negada e sem executar um modelo; não instala o plugin na conta pessoal.
+  O ensaio de colisão usa dois servidores sintéticos, em outro perfil isolado,
+  para comparar um namespace compartilhado com namespaces próprios.
+- `scripts/qualify-portable-reopen.mjs` aceita
+  `--reopen-delays-seconds 600,1200,1800` para conferir a instalação existente em
+  processos novos após 10, 20 e 30 minutos. Ele exige o mesmo identificador de
+  instalação, sem copiar ou baixar o acervo novamente, e verifica preservação,
+  concorrência e revogação separadamente.
+- A interface de recuperação foi exercitada em WKWebView offline, com estados
+  sintéticos e respostas atrasadas. Esse resultado não é uma instalação na conta
+  do usuário nem uma qualificação em outro Mac.
+
+A assinatura de publicação passa a exigir também a prova de renovação do
+bookmark real vinculada ao mesmo payload. Relatórios de outra versão, pasta
+substituta, reinstalação ou uso de perfil pessoal interrompem a assinatura.
+Os temporários grandes desses ensaios são removidos após concluir as verificações;
+somente relatórios compactos e o ZIP final solicitado são conservados.
+
+Em 10/10, no macOS 27.0.1, as três reaberturas passaram aos 631, 1.233 e 1.813
+segundos, com o mesmo identificador de instalação. Os testes posteriores também
+preservaram uma skill editada, os arquivos originais e a memória, sem download
+ou reinstalação. O ensaio prolongado e o ZIP final têm os mesmos 19.510 arquivos
+executáveis e de recursos; a única diferença no payload é o inventário do pacote.
+O ZIP final tem 82.560.127 bytes e SHA-256
+`ea52c778b7a8db011b874e43b5e8eeecdccc04c6a272e6c97b5cee2a38b2264f`.
+Seu boot, hashes externos, autorização renovada e persistência do host foram
+conferidos separadamente. Uma autorização normal também permaneceu válida
+após 30 minutos: o ensaio não demonstrou expiração automática por tempo.
+O ciclo completo foi repetido com o ZIP final após remover a expansão do pacote
+anterior, conservando a instalação e os dados do perfil sintético.

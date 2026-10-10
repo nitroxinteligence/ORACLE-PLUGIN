@@ -35,5 +35,22 @@ releaseRefresh?.();await Promise.all([first,second]);
 check('the map remains available after verification finishes',!!document.querySelector('#atlas svg')&&!document.querySelector('.ob2-screen').open);
 check('completion uses only read-only status and snapshot calls',calls.every(method=>['onboardingStatus','snapshot'].includes(method)));
 check('completion produces no spurious error',toasts.length===0);
+// A previously configured vault can fail to acquire its OS lease. That is a
+// recovery state, even before there is a live runID in this process.
+OracleOnboarding.suspend();
+const lost={...completed,hasVault:false,vaultPath:'',vaultName:'',runID:undefined,status:'failed',installationCompleted:false,resumeExisting:false,integrationPending:false,message:'A instalação existente foi preservada.',installationError:{code:'directory_grant_unavailable'},vaultRecovery:{state:'failed',savedSelection:true,error:{code:'directory_grant_unavailable',message:'A instalação existente foi preservada.'}}};
+status={...lost};snapshotStatus={...lost};const recoveryCalls=[];
+window.__oracleFixtureReceive=({id,method})=>{
+ recoveryCalls.push(method);
+ if(method==='onboardingResume'){status={...completed};snapshotStatus={...completed};}
+ setTimeout(()=>window.oracleReply(id,method==='snapshot'?{value:{...state,onboarding:{...snapshotStatus}}}:['onboardingStatus','onboardingResume'].includes(method)?{value:{...status}}:{error:'Unexpected action: '+method}),0);
+};
+await mount(refresh);
+check('a lost OS lease keeps the setup picker closed and shows recovery',!document.querySelector('.ob2-screen').open&&!panel.hidden&&panel.textContent.includes('Recuperar acesso ao vault'));
+check('recovery never fabricates completion or vault access',!OracleOnboarding.getState().installationCompleted&&!OracleOnboarding.getState().hasVault);
+panel.querySelector('.ob2-retry button').click();
+for(let i=0;i<40&&!panel.hidden;i++)await wait(20);
+check('retry recovers the existing vault and closes the notice',panel.hidden&&!document.querySelector('.ob2-screen').open&&OracleOnboarding.getState().resumeExisting===true);
+check('recovery does not call installation, permissions or the picker',recoveryCalls.includes('onboardingResume')&&recoveryCalls.every(method=>['onboardingStatus','snapshot','onboardingResume'].includes(method)));
 OracleOnboarding.suspend();
 return {checks,passed:checks.filter(row=>row.pass).length,failed:checks.filter(row=>!row.pass).length,scope:'Synthetic native WKWebView snapshot completion and delayed polling'};

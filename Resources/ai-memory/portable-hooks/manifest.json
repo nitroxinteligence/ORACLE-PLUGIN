@@ -1,6 +1,6 @@
 {
-  "version": "2.6.5",
-  "commit": "69f49e1c7ccd62e4c1dbcf0f81c5bdba6f82436f",
+  "version": "2.6.6",
+  "commit": "04a9e8f576de67e1d2282ee29415d1b0d5b979c8",
   "files": [
     {
       "path": "_lib.sh",

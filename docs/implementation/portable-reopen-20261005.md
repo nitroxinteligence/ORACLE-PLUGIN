@@ -1,5 +1,115 @@
 # Oracle System: retomada da instalação
 
+## Retomada após reinicialização do macOS, 19 de outubro
+
+A instalação real apresentou `ai_memory_profile_changed`: o `st_dev` salvo em
+`profile-prepared.json` era 16777233 e o atual 16777231, com o mesmo inode da
+pasta, configuração verificada e mesmos vínculos de instalação. `st_dev` é uma
+identidade de montagem, não uma identidade persistente entre reinicializações.
+
+`ai-memory-profile-identity.mjs` lê o UUID persistente do volume pelo descritor
+aberto (`fgetattrlist`, `ATTR_VOL_UUID`), combinando-o com inode e data de criação.
+A comparação persistente ignora apenas o número da montagem; verificações durante
+uma execução continuam comparando dispositivo e inode. Recibos antigos só são
+promovidos após validar autoria, instalação, vault, versão, configuração e pasta
+privada canônica, sob a trava oficial `.serve.lock`. Nenhuma inicialização, cópia
+de conteúdo, alteração de consentimento ou conclusão de onboarding é fabricada.
+
+A qualificação de instalação anterior agora simula a mudança de montagem no
+recibo antes de abrir a nova versão, exigindo preservação do run ID, do vault,
+da licença, do acervo e do nonce da memória. Um incremento explícito da versão do aplicativo no
+publicador conserva os componentes da última release assinada e executa todos
+os gates existentes; a execução agendada continua consultando versões upstream. Isso permite entregar correções do ORACLE sem trazer uma
+versão upstream ainda não compatível ou ampliar limites do pacote.
+
+Referências: cabeçalho Apple `sys/attr.h`, `CFURL.h` (UUID persistente do volume)
+e [getattrlist](https://developer.apple.com/library/archive/documentation/System/Conceptual/ManPages_iPhoneOS/man2/getattrlist.2.html).
+
+## Consulta e instalação de atualizações em 10/10
+
+O botão Verificar consultava os feeds sob a trava da instalação. Uma retomada
+legítima em outra conversa causava `installation_in_progress`; snapshots da
+consulta também esvaziavam o mapa. Consultas agora são somente leitura e podem
+ocorrer durante a retomada. Instalar skills ou trocar o runtime continua exigindo
+exclusividade. A apresentação da retomada preserva mapa e controles, sem declarar
+conclusão ou confiar em hooks antes das verificações reais.
+
+Falhas anteriores à criação de um pedido liberam Verificar. Uma resposta perdida
+é recuperada pelo mesmo ID, sem repetir a instalação. A consulta lê o acervo
+assinado, a release completa assinada e as releases estáveis dos repositórios
+originais GBrain e AI Memory. Versões upstream ainda não qualificadas são
+identificadas como aguardando uma release compatível do ORACLE.
+
+Importações manuais mantêm a identidade `oracle-system-mac-0-1-32`. Atualizações
+completas usam o pacote de plataforma assinado em `PLUGIN_DATA`, com inventário,
+hashes, permissões, limites e seleção atômica. Na abertura seguinte a assinatura
+e todos os arquivos são admitidos novamente. O cache do host não é editado e
+nenhum novo registro de plugin é criado. Instalações pelo marketplace continuam
+usando a CLI oficial do host. Vault, licença e consentimentos são preservados.
+
+A retomada do acervo atualizado usa seu próprio manifesto assinado, em vez dos
+hashes da versão antiga do ZIP. Um executável mais novo não comprova que seu
+acervo foi instalado. Arquivos alterados continuam preservados como conflitos
+explícitos. Os testes usam perfis e notas sintéticas, sem reinstalar o vault real.
+
+O teste real da 0.1.33 revelou uma segunda corrida: a consulta automática podia
+iniciar antes do clique manual. Consultas simultâneas agora compartilham o mesmo
+pedido e seu ID canônico. Respostas antigas de status não apagam resultados novos.
+O teste concorrente cobre também perda de resposta, cancelamento e mais de oito
+chamadas acompanhando a mesma consulta.
+
+O Desktop também manteve a interface e um resultado 0.1.33 em uma janela aberta,
+apesar de os processos já usarem 0.1.34. O recurso MCP da interface agora inclui
+a versão na URI, consistentemente no bootstrap, ferramentas, abertura e leitura.
+Uma versão nova não responde à URI antiga. Essa troca não altera a identidade
+do plugin, nem o perfil, nem as autorizações do usuário.
+
+O usuário confirmou a consulta concluída na 0.1.35. A release completa 0.1.36
+passou na qualificação e foi publicada com GBrain 0.60.151.0 e AI Memory 2.6.3.
+A atualização real assinada da 0.1.35 para a 0.1.36 também selecionou o runtime e
+a interface novos sem editar o cache do host. A compressão Windows mantém o
+limite de importação de 100 MB; executar o pacote no Windows continua exigindo
+qualificação nesse sistema.
+
+O exercício adicional com uma instalação completa da 0.1.35 encontrou
+`ai_memory_profile_unowned` ao retomar na 0.1.36: `restoreOnly` pulava a migração
+e comparava o recibo do AI Memory 2.5.2 com o executável 2.6.3. A retomada agora
+executa a mesma transação de migração de perfil fechado, com autoria anterior
+revisada, trava oficial e readback de todos os registros. Não cria um perfil
+ausente nem restaura consentimentos de captura, portabilidade ou hooks.
+
+O pacote manual 0.1.37 corrigiu esse caminho com os componentes já qualificados.
+A release completa 0.1.38 foi publicada após qualificação. O pipeline exige
+também a instalação completa do pacote anterior e sua retomada no candidato,
+com o mesmo run ID, bookmark e arquivos originais; o teste de migração do AI
+Memory agora usa `restoreOnly`, como o caminho de reabertura do produto.
+
+A repetição local usou o mesmo perfil isolado que havia falhado na 0.1.36.
+Na 0.1.37 ele retornou a `completed`: AI Memory 2.5.2 foi migrado para 2.6.3,
+com a identidade, run ID, bookmark, journals do acervo e notas preservados.
+Nenhum picker, download ou reinstalação do acervo foi executado nessa retomada.
+O serviço de memória permaneceu fechado; licença e seleção do teste são
+sintéticas, e a licença de fixture foi rotacionada para a nova chave de teste.
+
+A 0.1.38 passou também na instalação completa da 0.1.36 e sua retomada no
+candidato: run ID, bookmark, licença, perfil e arquivos permaneceram íntegros,
+sem repetir o picker ou reinstalar o acervo. A atualização real assinada da
+0.1.37 para a 0.1.38 consultou os quatro feeds, ativou o runtime e reabriu com
+`ui://oracle/workspace/0.1.38`. O cache do host e o vault de teste foram preservados.
+Os componentes qualificados são GBrain 0.60.152.0 e AI Memory 2.6.3; a consulta
+live confirmou essas versões nos repositórios originais em 10/10/2026.
+
+O ZIP manual final 0.1.38 mantém `oracle-system-mac-0-1-32`, tem 84.696.368 bytes
+e SHA-256 `1f5c6b8fdee8e364c49985e9dde12165c5a5c1b3f579c1e9e3a488d5be06d5d2`.
+CRC, inventários de ambas as camadas e boot STDIO foram verificados. Esse ZIP
+foi aplicado ao mesmo registro privado, sem criar outro plugin. Os testes de
+instalação e atualização descritos acima usaram somente perfis isolados.
+
+Verificações locais: testes focados de atualização e operação, seis testes de
+instalação/readback com o método portátil real, 20 casos na WKWebView isolada e
+boot STDIO do ZIP com conferência de todos os recibos externos. Esses escopos não
+substituem a verificação da versão ativa no Desktop nem a qualificação Windows.
+
 O processo portátil perdia a seleção do vault e os recibos em memória ao encerrar.
 O perfil ainda continha a instalação, mas a abertura seguinte voltava à escolha
 do Obsidian. Alterar somente a versão do ZIP não corrigia esse ciclo.

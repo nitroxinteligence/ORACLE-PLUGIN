@@ -23,20 +23,25 @@ def version(v):return tuple(map(int,v.split('.')))
 def release(a,job,secret,token):
     prior_pins=read(ROOT/'Resources/updates/portable-upstream.json')
     api_env={**os.environ,**({'ORACLE_RELEASE_API_TOKEN':token} if token else {})}
-    candidates=json.loads(run(['node',ROOT/'scripts/portable-upstream-intake.mjs','--download','no'],env=api_env))
-    changed=any(candidates['components'][k]['commit']!=prior_pins[k]['commit'] for k in ['gbrain','aiMemory'])
-    if a.event=='schedule' and not changed:print(json.dumps({'changed':False,'published':False}));return
+    if a.event=='schedule':
+        candidates=json.loads(run(['node',ROOT/'scripts/portable-upstream-intake.mjs','--download','no'],env=api_env))
+        changed=any(candidates['components'][k]['commit']!=prior_pins[k]['commit'] for k in ['gbrain','aiMemory'])
+        if not changed:print(json.dumps({'changed':False,'published':False}));return
     baseline=job/'baseline';run(['node',ROOT/'scripts/download-portable-baseline.mjs',baseline],env=api_env);previous=read(baseline/'release.json')
+    source=read(ROOT/'packages/oracle-desktop-portable/plugin.json')
+    # An explicit application patch keeps the last qualified engines. Scheduled
+    # upstream intake still discovers new versions and passes every same gate.
+    keep_components=a.mode=='hotfix' or (a.event!='schedule' and version(source['version'])>version(previous['version']))
     pinned_root=ROOT/'oracle-plugin-release.json'
     pending=previous
     if pinned_root.exists():
         check="import{readFileSync}from'node:fs';import{admitPluginRelease}from'./packages/oracle-desktop-portable/plugin-release-admission.mjs';import{loadReviewedContentTrust}from'./packages/oracle-desktop-portable/content-admission.mjs';const r=admitPluginRelease(readFileSync('oracle-plugin-release.json'),{trust:loadReviewedContentTrust()});console.log(JSON.stringify({version:r.version,sequence:r.sequence}));"
         pending=json.loads(run(['node','--input-type=module','-e',check]))
-    source=read(ROOT/'packages/oracle-desktop-portable/plugin.json');floor=max(version(previous['version']),version(pending['version']))
+    floor=max(version(previous['version']),version(pending['version']))
     next_version=source['version'] if version(source['version'])>floor else '.'.join(map(str,[floor[0],floor[1],floor[2]+1]));sequence=max(previous['sequence'],pending['sequence'])+1
     source['version']=next_version;(ROOT/'packages/oracle-desktop-portable/plugin.json').write_text(json.dumps(source,ensure_ascii=False,indent=2)+'\n')
     prior_boot=job/'previous-boot';run(['python3',ROOT/'scripts/qualify-portable-package.py','--archive',previous['archive'],'--output',prior_boot]);prior_runtime=read(prior_boot/'report.json')
-    intake=job/'intake';run(['node',ROOT/'scripts/portable-upstream-intake.mjs','--output',intake,'--download','yes'],env=api_env);intake_doc=read(intake/'intake.json');gbrain=intake_doc['components']['gbrain']
+    intake=job/'intake';run(['node',ROOT/'scripts/portable-upstream-intake.mjs','--output',intake,'--download','yes']+(['--approved-release',baseline/'oracle-plugin-release.json'] if keep_components else []),env=api_env);intake_doc=read(intake/'intake.json');gbrain=intake_doc['components']['gbrain']
     # Provision only this disposable official checkout, honoring its lockfile.
     # No lifecycle scripts, shared vendor changes or implicit native build.
     binaries=job/'binaries';binaries.mkdir()
@@ -55,6 +60,7 @@ def release(a,job,secret,token):
     methods=job/'method';run(['python3',ROOT/'scripts/build-official-skills.py','--source',intake/'gbrain','--output',methods,'--pin',gbrain['commit'],'--version',gbrain['version'],'--maximum-bytes','140000000'])
     vendors=job/'vendors';run(['python3',ROOT/'scripts/prepare-portable-vendors.py','--intake',intake,'--output',vendors,'--method',methods])
     test_env={**os.environ,'ORACLE_TEST_AI_MEMORY_BINARY':str(vendors/'ai-memory-mac')}
+    run([bun,'test','./scripts/test-portable-ai-memory-profile-identity.mjs'],env=test_env)
     run(['node','--test','scripts/test-portable-interface-version.mjs','scripts/test-portable-runtime-bootstrap.mjs'],env=test_env)
     run(['node','--test','scripts/test-portable-content-admission.mjs','scripts/test-portable-skills-updates.mjs','scripts/test-portable-profile-upgrade.mjs','scripts/test-portable-official-hooks.mjs','scripts/test-plugin-bridge.mjs','scripts/test-publisher-fetch.mjs','scripts/test-portable-plugin-updates.mjs','scripts/test-portable-component-updates.mjs','scripts/test-readable-skill-metadata-upgrade.mjs','scripts/test-codex-user-skills-registration.mjs','scripts/test-interface-action-receipts.mjs'],env=test_env)
     catalog=job/'catalog';run(['node',ROOT/'scripts/download-reviewed-skills.mjs',catalog],env=api_env)
@@ -110,4 +116,4 @@ def main(a):
         return release(a,job,secret,token)
 
 if __name__=='__main__':
-    p=argparse.ArgumentParser(description=__doc__);p.add_argument('--event',required=True,choices=['push','schedule','workflow_dispatch']);p.add_argument('--mode',default='release',choices=['release','validate']);p.add_argument('--keep-work',action='store_true',help='Explicitly retain large temporary artifacts for diagnosis');main(p.parse_args())
+    p=argparse.ArgumentParser(description=__doc__);p.add_argument('--event',required=True,choices=['push','schedule','workflow_dispatch']);p.add_argument('--mode',default='release',choices=['release','validate','hotfix']);p.add_argument('--keep-work',action='store_true',help='Explicitly retain large temporary artifacts for diagnosis');main(p.parse_args())

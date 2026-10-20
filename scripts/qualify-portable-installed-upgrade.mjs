@@ -37,12 +37,17 @@ try{
  const before=await service.profileStore.load(),contentBefore=structuredClone(before.contentInstallations),stageBefore=await fs.readdir(join(dataDir,'content-staging'));
  const sample=join(vault,'SISTEMA/skills/codigo/frontend/impeccable/SKILL.md'),sampleHash=createHash('sha256').update(await fs.readFile(sample)).digest('hex');
  await service.close();service=null;
+ // st_dev is a mount-local number. Exercise the exact legacy receipt failure
+ // seen after reboot without changing the directory, its contents or inode.
+ const memoryReceiptPath=join(dataDir,'ai-memory/profile-prepared.json'),memoryReceipt=JSON.parse(await fs.readFile(memoryReceiptPath));
+ memoryReceipt.dataIdentity.dev+=17;await fs.writeFile(memoryReceiptPath,JSON.stringify(memoryReceipt),{mode:0o600});
  process.stdout.write(JSON.stringify({stage:'restore-current'})+'\n');
  service=await open(current.payloadRoot);lastPhase='';monitor=setInterval(()=>{const phase=service.coordinator.snapshot().status;if(phase!==lastPhase){lastPhase=phase;process.stdout.write(JSON.stringify({phase,stage:'restore-current'})+'\n');}},5000);
  const restored=await finish();clearInterval(monitor);
  assert.equal(restored.status,'completed');assert.equal(restored.installationCompleted,true);assert.equal(restored.resumeExisting,true);assert.equal(restored.runID,installed.runID);assert.equal(pickerCalls,1);
+ const restoredMemoryReceipt=JSON.parse(await fs.readFile(memoryReceiptPath));assert.match(restoredMemoryReceipt.dataIdentity.volumeUUID,/^[a-f0-9]{32}$/);assert.equal(restoredMemoryReceipt.nonce,memoryReceipt.nonce);
  const after=await service.profileStore.load();assert.equal(after.qualificationMarker,before.qualificationMarker);assert.equal(after.license,before.license);assert.deepEqual(after.contentInstallations,contentBefore);assert.deepEqual(await fs.readdir(join(dataDir,'content-staging')),stageBefore);
  assert.equal(createHash('sha256').update(await fs.readFile(sample)).digest('hex'),sampleHash);assert.equal(await fs.readFile(join(vault,'PESSOAL/original.md'),'utf8'),'# Preserve synthetic original\n');
- const result={passed:true,baseVersion:versions[0],upgradedVersion:versions[1],actualPackagedServices:true,signedCorpus:true,actualOSBookmark:true,realGBrainIndex:true,realAIMemoryProfile:true,status:restored.status,installationCompleted:restored.installationCompleted,runIDPreserved:true,vaultPickerRepeated:false,contentReinstalled:false,contentStagingUnchanged:true,originalNotePreserved:true,skillPreserved:true,profileMarkerPreserved:true,licensePreserved:true,personalProfileUsed:false,hooksRequested:false};
+ const result={passed:true,baseVersion:versions[0],upgradedVersion:versions[1],actualPackagedServices:true,signedCorpus:true,actualOSBookmark:true,realGBrainIndex:true,realAIMemoryProfile:true,status:restored.status,installationCompleted:restored.installationCompleted,runIDPreserved:true,vaultPickerRepeated:false,contentReinstalled:false,contentStagingUnchanged:true,originalNotePreserved:true,skillPreserved:true,profileMarkerPreserved:true,licensePreserved:true,personalProfileUsed:false,hooksRequested:false,simulatedRemount:true,persistentMemoryIdentity:true};
  await fs.writeFile(join(scratch,'report.json'),JSON.stringify(result,null,2)+'\n');process.stdout.write(JSON.stringify(result)+'\n');
 }finally{clearInterval(monitor);await service?.close();}

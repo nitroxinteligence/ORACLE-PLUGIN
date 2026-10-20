@@ -6,16 +6,22 @@ import {fileURLToPath} from 'node:url';
 import {latestRelease,releaseBytes} from '../packages/oracle-desktop-portable/release-network.mjs';
 import {skillsSHA} from '../packages/oracle-desktop-portable/skills-release-admission.mjs';
 import {createPublisherFetch} from './publisher-fetch.mjs';
+import {admitPluginRelease} from '../packages/oracle-desktop-portable/plugin-release-admission.mjs';
+import {loadReviewedContentTrust} from '../packages/oracle-desktop-portable/content-admission.mjs';
 const execute=promisify(execFile),fail=message=>{throw new Error(message);};
 const official=Object.freeze({gbrain:'garrytan/gbrain',aiMemory:'akitaonrails/ai-memory'});
 async function json(url,fetchImpl){return JSON.parse((await releaseBytes(url,{maximum:2000000,fetchImpl,redirects:false,timeoutMS:15000})).toString('utf8'));}
-export async function upstreamCandidates({fetchImpl=globalThis.fetch}={}){
+export async function upstreamCandidates({fetchImpl=globalThis.fetch,approvedRelease}={}){
  const output={schemaVersion:1,checkedAt:new Date().toISOString(),components:{},downloaded:false,qualified:false};
  for(const [name,repository] of Object.entries(official)){
-  const release=await latestRelease(repository,{fetchImpl});if(!/^v\d+\.\d+\.\d+(?:\.\d+)?$/.test(release.tag_name))fail('Unsupported upstream stable version.');
+  const approved=approvedRelease?.engines[name];
+  if(approved&&(approved.repository!==repository||!/^\d+\.\d+\.\d+(?:\.\d+)?$/.test(approved.version)))fail('Invalid approved upstream composition.');
+  const release=approved?await json(`https://api.github.com/repos/${repository}/releases/tags/v${approved.version}`,fetchImpl):await latestRelease(repository,{fetchImpl});
+  if(release.draft||release.prerelease||!/^v\d+\.\d+\.\d+(?:\.\d+)?$/.test(release.tag_name)||approved&&release.tag_name!=='v'+approved.version)fail('Unsupported upstream stable version.');
   let ref=await json(`https://api.github.com/repos/${repository}/git/ref/tags/${release.tag_name}`,fetchImpl),object=ref.object;
   for(let hop=0;object?.type==='tag'&&hop<3;hop++){if(!/^[a-f0-9]{40}$/.test(object.sha??''))fail('Invalid upstream tag object.');object=(await json(`https://api.github.com/repos/${repository}/git/tags/${object.sha}`,fetchImpl)).object;}
   if(object?.type!=='commit'||!/^[a-f0-9]{40}$/.test(object.sha??''))fail('Upstream tag did not resolve to an immutable commit.');
+  if(approved&&object.sha!==approved.commit)fail('Approved upstream tag changed.');
   const assets=release.assets.map(row=>({name:row.name,bytes:row.size,sha256:row.digest?.replace(/^sha256:/,''),url:row.browser_download_url}));
   output.components[name]={repository,version:release.tag_name.slice(1),tag:release.tag_name,commit:object.sha,publishedAt:release.published_at,assets};
  }return output;
@@ -35,8 +41,9 @@ export async function downloadUpstreamCandidates(candidates,output,{fetchImpl=gl
  const receipt={...candidates,downloaded:true,artifacts:downloaded,qualified:false};await fs.writeFile(join(output,'intake.json'),JSON.stringify(receipt,null,2)+'\n',{flag:'wx',mode:0o600});return receipt;
 }
 export async function main(args=process.argv.slice(2)){
- const options={};for(let i=0;i<args.length;i+=2){if(!['--output','--download'].includes(args[i])||!args[i+1]||options[args[i]])fail('Usage: --output /absolute/new/directory --download yes|no');options[args[i]]=args[i+1];}
- const fetchImpl=createPublisherFetch(),candidates=await upstreamCandidates({fetchImpl});if(options['--download']==='yes'){if(!options['--output'])fail('Output required.');return downloadUpstreamCandidates(candidates,options['--output'],{fetchImpl});}
+ const options={};for(let i=0;i<args.length;i+=2){if(!['--output','--download','--approved-release'].includes(args[i])||!args[i+1]||options[args[i]])fail('Usage: --output /absolute/new/directory --download yes|no [--approved-release signed-manifest]');options[args[i]]=args[i+1];}
+ const approvedRelease=options['--approved-release']?admitPluginRelease(await fs.readFile(options['--approved-release']),{trust:loadReviewedContentTrust()}):undefined;
+ const fetchImpl=createPublisherFetch(),candidates=await upstreamCandidates({fetchImpl,approvedRelease});if(options['--download']==='yes'){if(!options['--output'])fail('Output required.');return downloadUpstreamCandidates(candidates,options['--output'],{fetchImpl});}
  if(options['--download']!==undefined&&options['--download']!=='no')fail('Download must be yes or no.');return candidates;
 }
 if(process.argv[1]&&resolve(process.argv[1])===fileURLToPath(import.meta.url))main().then(result=>process.stdout.write(JSON.stringify({components:Object.fromEntries(Object.entries(result.components).map(([key,row])=>[key,{repository:row.repository,version:row.version,commit:row.commit}])),downloaded:result.downloaded,qualified:false})+'\n')).catch(error=>{process.stderr.write(error.message+'\n');process.exitCode=1;});

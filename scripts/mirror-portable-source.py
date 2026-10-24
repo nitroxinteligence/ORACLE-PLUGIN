@@ -24,6 +24,10 @@ def mirror(destination):
         mapping[path] = ROOT / path
     for source in sorted((ROOT / 'Resources/ai-memory').glob('portable-schema-v*.json')): mapping[source.relative_to(ROOT).as_posix()] = source
     for name in SCRIPTS: mapping['scripts/' + name] = ROOT / 'scripts' / name
+    for name in ['package-plugin-installer.py', 'test-plugin-installer.py']:
+        mapping['scripts/' + name] = ROOT / 'scripts' / name
+    for source in sorted((ROOT / 'distribution/portable/installer').glob('*')):
+        if source.is_file(): mapping[source.relative_to(ROOT).as_posix()] = source
     mapping['scripts/test-portable-component-updates.mjs'] = ROOT / 'scripts/test-portable-component-updates.mjs'
     mapping['scripts/qualify-portable-installed-upgrade.mjs'] = ROOT / 'scripts/qualify-portable-installed-upgrade.mjs'
     for name in ['test-portable-interface-version.mjs','test-portable-runtime-bootstrap.mjs']: mapping['scripts/'+name]=ROOT/'scripts'/name

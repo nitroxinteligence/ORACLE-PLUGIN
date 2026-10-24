@@ -1,0 +1,33 @@
+ORACLE SYSTEM | INSTALAÇÃO LOCAL PARA MAC
+
+Use esta alternativa se o ChatGPT mostrar "Couldn't add plugin. Try again."
+ao importar o ZIP. Ela instala o plugin pelo gerenciador local oficial do
+ChatGPT/Codex Desktop, diretamente do repositório oficial do Oracle.
+
+1. Extraia este ZIP.
+2. Abra "Instalar Oracle.command".
+3. Aguarde a confirmação com a versão instalada.
+4. Abra Plugins no ChatGPT/Codex Desktop e escolha Oracle System.
+
+Se o macOS não abrir o arquivo pelo Finder, abra Terminal, digite bash e um
+espaço, arraste "Instalar Oracle.command" para a janela e pressione Enter.
+Não é necessário desativar proteções do macOS nem usar sudo.
+
+Requisitos: macOS 13+, Apple Silicon, internet e ChatGPT/Codex Desktop
+atualizado, com o comando oficial de instalação de plugins disponível.
+Políticas da sua organização continuam sendo aplicadas pelo aplicativo.
+
+Este ZIP é um instalador local. Não o selecione em "Adicionar plugin".
+O ZIP normal do plugin continua disponível separadamente.
+
+O instalador pode ser executado novamente: atualiza a mesma fonte e instala
+a mesma identidade local. Ele não cria registros privados na conta, remove
+outros plugins, escolhe seu vault, ativa hooks nem modifica consentimentos.
+Instalações antigas importadas por ZIP permanecem sob o controle da conta.
+
+No Oracle, confirme sua licença, escolha seu Obsidian e as permissões.
+Para atualizar depois, use Atualizações dentro do Oracle ou execute este
+instalador novamente. A versão vem do canal oficial qualificado do GitHub.
+
+Fonte: https://github.com/nitroxinteligence/ORACLE-PLUGIN
+Download: https://oracle.falamateus.com.br/download/

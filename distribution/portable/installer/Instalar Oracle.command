@@ -28,4 +28,15 @@ fi
 oracle_installer_cli=$(oracle_find_cli)
 oracle_installer_scratch=$(/usr/bin/mktemp -d -t oracle-plugin-install)
 printf '%s\n' 'ORACLE System | instalação local do plugin'
-oracle_install "$oracle_installer_cli" "$oracle_installer_scratch"
+if [ -f "$oracle_installer_root/plugin-archive.json" ]; then
+  source "$oracle_installer_root/local-package.sh"
+  oracle_installer_data="$HOME/Library/Application Support/OracleSystemPluginInstaller"
+  if [ "$#" -gt 0 ]; then
+    # Explicit isolated harness only, never a production profile override.
+    [ "$#" -eq 2 ] && [ "$1" = --test-state ] && [ -d "$2" ] && [[ "$2" = /*/.work/* ]] && [ "$(cd -- "$2" && pwd -P)" = "$2" ] && [ "${CODEX_HOME:-}" = "$2/codex" ] && [ -d "$2/codex" ] || { printf '%s\n' 'Estado de teste isolado inválido.' >&2; exit 1; }
+    oracle_installer_data="$2/source"
+  fi
+  oracle_install_local "$oracle_installer_cli" "$oracle_installer_scratch" "$oracle_installer_data" "$oracle_installer_root"
+else
+  oracle_install "$oracle_installer_cli" "$oracle_installer_scratch"
+fi

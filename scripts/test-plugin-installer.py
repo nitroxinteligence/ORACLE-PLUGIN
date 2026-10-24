@@ -84,7 +84,7 @@ else: print(json.dumps({'marketplaceName':'oracle-system','alreadyAdded':False})
             packager.package('0.1.42', output)
             with zipfile.ZipFile(output) as archive:
                 self.assertIsNone(archive.testzip())
-                self.assertEqual(len(archive.infolist()), 3)
+                self.assertEqual(len(archive.infolist()), 4)
                 entry = archive.getinfo('Oracle-System-Instalador/Instalar Oracle.command')
                 self.assertEqual((entry.external_attr >> 16) & 0o777, 0o755)
                 self.assertNotIn('runtime/bun', '\n'.join(archive.namelist()))
@@ -92,6 +92,27 @@ else: print(json.dumps({'marketplaceName':'oracle-system','alreadyAdded':False})
             with self.assertRaisesRegex(ValueError, 'already exists'):
                 packager.package('0.1.42', output)
             self.assertEqual(output.read_bytes(), before)
+
+    def test_complete_installer_preserves_approved_inner_package_and_rejects_wrong_hash(self):
+        import hashlib
+        base = ROOT / '.work/import-installer-tests'
+        base.mkdir(parents=True, exist_ok=True)
+        with tempfile.TemporaryDirectory(dir=base) as directory:
+            source = Path(directory) / 'plugin.zip'
+            with zipfile.ZipFile(source, 'w') as archive:
+                archive.writestr('oracle-system-mac-0-1-32/plugin.json', json.dumps({'name':'oracle-system-mac-0-1-32','version':'0.1.42'}))
+            approved = hashlib.sha256(source.read_bytes()).hexdigest()
+            output = Path(directory) / 'complete.zip'
+            with self.assertRaisesRegex(ValueError, 'approved SHA-256'):
+                packager.package('0.1.42', output, source, '0' * 64)
+            self.assertFalse(output.exists())
+            packager.package('0.1.42', output, source, approved)
+            with zipfile.ZipFile(output) as archive:
+                self.assertEqual(archive.read('Oracle-System-Instalador/plugin.zip'), source.read_bytes())
+                descriptor = json.loads(archive.read('Oracle-System-Instalador/plugin-archive.json'))
+                self.assertEqual(descriptor['sha256'], approved)
+                self.assertEqual(descriptor['kind'], 'complete-mac-installer')
+                self.assertIn('Oracle-System-Instalador/local-package.sh', archive.namelist())
 
 
 if __name__ == '__main__':
